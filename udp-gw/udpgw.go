@@ -5,15 +5,15 @@
 package main
 
 import (
-        "flag"
         "encoding/base64"
-        "fmt"
         "encoding/json"
+        "flag"
+        "fmt"
         "log"
         "net"
-        "sync"
         "regexp"
         "strconv"
+        "sync"
         "time"
 
         proto "github.com/huin/mqtt"
@@ -21,23 +21,22 @@ import (
 )
 
 var host = flag.String("mqtt", "localhost:1883", "hostname:port of mqtt broker")
-var udp  = flag.Int("udp", 9999, "UDP port to listen on")
+var udp = flag.Int("udp", 9999, "UDP port to listen on")
 var id = flag.String("id", "udp-gw", "client id")
 var user = flag.String("user", "", "username")
 var pass = flag.String("pass", "", "password")
-var dump = flag.Bool("dump", false, "dump messages?")
 
 //===== MQTT Json Message (this should be defined in some shared global place)
 
 type RFMessage struct {
-        AsOf            int64   `json:"_asof",omitempty`
-        Kind            string  `json:"kind",omitempty`
-        Base64          string  `json:"base64",omitempty`
+        AsOf    int64   `json:"_asof",omitempty`
+        Kind    string  `json:"kind",omitempty`
+        Base64  string  `json:"base64",omitempty`
 }
 
 // message type codes used in UDP packets
 const (
-        RF_BcastPush    = iota
+        RF_BcastPush = iota
         RF_BcastReq
         RF_DataPush
         RF_DataReq
@@ -55,25 +54,26 @@ const (
 // the RF network group id that it handles. We keep track of that here so we can send
 // packets in the reverse direction.
 
-var networks = make(map[byte]*net.UDPAddr)       // group_id -> UDP address
-var networksMutex sync.Mutex                    // synchronize access to the networks map
+var networks = make(map[byte]*net.UDPAddr) // group_id -> UDP address
+var networksMutex sync.Mutex               // synchronize access to the networks map
 
 // lookup group_id -> UDP addr, returns nil if we don't have a mapping
-func mapGroupToAddr(groupId byte) (*net.UDPAddr) {
+func mapGroupToAddr(groupId byte) *net.UDPAddr {
         networksMutex.Lock()
         defer networksMutex.Unlock()
         return networks[groupId]
 }
 
-// save group_id -> UDP addr mapping
-func saveGroupToAddr(groupId byte, addr *net.UDPAddr) {
+// save group_id -> UDP addr mapping, return true if this is new groupId
+func saveGroupToAddr(groupId byte, addr *net.UDPAddr) bool {
         networksMutex.Lock()
         defer networksMutex.Unlock()
-        if networks[groupId] == nil || !networks[groupId].IP.Equal(addr.IP) ||
-           networks[groupId].Port != addr.Port {
+        newGroup := networks[groupId] == nil
+        if newGroup || !networks[groupId].IP.Equal(addr.IP) || networks[groupId].Port != addr.Port {
                 log.Printf("RF group %d now reachable via %s:%d", groupId, addr.IP, addr.Port)
         }
         networks[groupId] = addr
+        return newGroup
 }
 
 //===== Main
@@ -88,7 +88,6 @@ func main() {
                 log.Fatalf("MQTT broker: %s", err)
         }
         cc := mqtt.NewClientConn(mqttSock)
-        cc.Dump = *dump
         cc.ClientId = *id
         if err := cc.Connect(*user, *pass); err != nil {
                 log.Fatalf("Mqtt connect failed: %v\n", err)
@@ -102,8 +101,8 @@ func main() {
         if err != nil {
                 log.Fatalf("Can't listen to UDP :%d : %s", *udp, err.Error())
         }
-        log.Printf("Listening on UDP port %d", *udp);
-        go udpServer(udpSock, cc);
+        log.Printf("Listening on UDP port %d", *udp)
+        go udpServer(udpSock, cc)
 
         // do some work..
         mqttServer(cc, udpSock)
@@ -115,17 +114,8 @@ func mqttServer(cc *mqtt.ClientConn, udp *net.UDPConn) {
         for m := range cc.Incoming {
                 payload := []byte(m.Payload.(proto.BytesPayload))
                 log.Printf("RCV mqtt: %s %d bytes", m.TopicName, len(payload))
-                encode(udp, m.QosLevel>0, m.TopicName, payload)
+                encode(udp, m.QosLevel > 0, m.TopicName, payload)
         }
-
-/*
-        tq := make([]proto.TopicQos, flag.NArg())
-        for i := 0; i < flag.NArg(); i++ {
-                tq[i].Topic = flag.Arg(i)
-                tq[i].Qos = proto.QosAtMostOnce
-        }
-        cc.Subscribe(tq)
-*/
 }
 
 //===== UDP packet processor
@@ -150,7 +140,7 @@ func udpServer(udp *net.UDPConn, mqttConn *mqtt.ClientConn) {
 
 //===== Encode MQTT message into a UDP packet
 
-var txTopicRE = regexp.MustCompile(`^rf/(\d+)/(\d+)/(t.)$`) // rf/group_id/node_id/(tx|tb)
+var txTopicRE = regexp.MustCompile(`^/rf/(\d+)/(\d+)/(t.)$`) // rf/group_id/node_id/(tx|tb)
 
 func encode(udp *net.UDPConn, ack bool, topic string, payload []byte) {
         // decode the topic to determine where we're sending this
@@ -160,7 +150,7 @@ func encode(udp *net.UDPConn, ack bool, topic string, payload []byte) {
                 return
         }
         groupId, _ := strconv.Atoi(tt[1])
-        nodeId, _  := strconv.Atoi(tt[2])
+        nodeId, _ := strconv.Atoi(tt[2])
         boot := tt[3] == "tb"
         unicast := nodeId > 0 && nodeId < 31
         if !unicast && nodeId != 0 {
@@ -188,11 +178,16 @@ func encode(udp *net.UDPConn, ack bool, topic string, payload []byte) {
         var code byte
         switch {
         //case boot && msg.Kind == "pairing":     code = RF_Pairing // not sent out to nodes!
-        case  boot && msg.Kind == "boot" && unicast:     code = RF_BootReply
-        case !boot &&  ack &&  unicast:                  code = RF_DataReq
-        case !boot &&  ack && !unicast:                  code = RF_BcastReq
-        case !boot && !ack &&  unicast:                  code = RF_DataPush
-        case !boot && !ack && !unicast:                  code = RF_BcastPush
+        case boot && msg.Kind == "boot" && unicast:
+                code = RF_BootReply
+        case !boot && ack && unicast:
+                code = RF_DataReq
+        case !boot && ack && !unicast:
+                code = RF_BcastReq
+        case !boot && !ack && unicast:
+                code = RF_DataPush
+        case !boot && !ack && !unicast:
+                code = RF_BcastPush
         default:
                 log.Printf("Invalid MQTT message combo: boot=%t kind=%s ack=%t",
                         boot, msg.Kind, ack)
@@ -200,25 +195,34 @@ func encode(udp *net.UDPConn, ack bool, topic string, payload []byte) {
 
         // actually send the packet
         buf := make([]byte, len(data)+3)
-        buf[0]  = code
-        buf[1]  = byte(groupId)
-        buf[2]  = byte(nodeId)
+        buf[0] = code
+        buf[1] = byte(groupId)
+        buf[2] = byte(nodeId)
         copy(buf[3:], data)
         udp.WriteToUDP(buf, addr)
 }
 
 //===== Decode UDP packet into MQTT message
 
-func decode(mqtt *mqtt.ClientConn, src *net.UDPAddr, pkt []byte) {
+func decode(cc *mqtt.ClientConn, src *net.UDPAddr, pkt []byte) {
         // Parse packet
-        code    := pkt[0]
+        code := pkt[0]
         groupId := pkt[1]
-        nodeId  := pkt[2] & 0x1f
-        ack     := 0 // really need to decode pkt[2]
-        data    := pkt[3:]
+        nodeId := pkt[2] & 0x1f
+        ack := 0 // really need to decode pkt[2]
+        data := pkt[3:]
 
         // Record the groupId -> addr mapping
-        saveGroupToAddr(groupId, src)
+        newGroup := saveGroupToAddr(groupId, src)
+
+        // If this is a new group subscribe to the topic
+        if newGroup {
+                sub := []proto.TopicQos{
+                        {Topic: fmt.Sprintf("/rf/%d/+/tx", groupId), Qos: proto.QosAtMostOnce},
+                        {Topic: fmt.Sprintf("/rf/%d/+/tb", groupId), Qos: proto.QosAtMostOnce},
+                }
+                cc.Subscribe(sub)
+        }
 
         // Create the topic
         if code > RF_Debug && code != RF_BootReply {
@@ -227,27 +231,33 @@ func decode(mqtt *mqtt.ClientConn, src *net.UDPAddr, pkt []byte) {
                 return
         }
         // handle boot protocol
-        rxrb := "rx"; kind := ""
+        rxrb := "rx"
+        kind := ""
         switch code {
-        case RF_Pairing: rxrb = "rb"; kind = "pairing"
-        case RF_BootReq: rxrb = "rb"; kind = "boot"
+        case RF_Pairing:
+                rxrb = "rb"
+                kind = "pairing"
+        case RF_BootReq:
+                rxrb = "rb"
+                kind = "boot"
         }
         // handle packets with no source node id
         switch code {
-        case RF_DataPush, RF_DataReq, RF_AckBcast, RF_BootReply, RF_Debug: nodeId = 0;
+        case RF_DataPush, RF_DataReq, RF_AckBcast, RF_BootReply, RF_Debug:
+                nodeId = 0
         }
         // finally the topic
         topic := fmt.Sprintf("/rf/%d/%d/%s", groupId, nodeId, rxrb)
 
         // Create the payload
         payload, _ := json.Marshal(RFMessage{
-                AsOf: time.Now().UnixNano() / 1000000, // Javascript time: milliseconds
+                AsOf:   time.Now().UnixNano() / 1000000, // Javascript time: milliseconds
                 Base64: base64.StdEncoding.EncodeToString(data),
-                Kind: kind,
+                Kind:   kind,
         })
 
         // Send it off
-        mqtt.Publish(&proto.Publish{
+        cc.Publish(&proto.Publish{
                 Header:    proto.Header{QosLevel: proto.QosLevel(ack)},
                 TopicName: topic,
                 Payload:   proto.BytesPayload(payload),

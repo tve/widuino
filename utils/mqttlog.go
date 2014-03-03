@@ -6,10 +6,10 @@ package main
 
 import (
         "flag"
-        "log"
-        "net"
         proto "github.com/huin/mqtt"
         "github.com/jeffallen/mqtt"
+        "log"
+        "net"
 )
 
 var host = flag.String("host", "localhost:1883", "hostname of MQTT broker")
