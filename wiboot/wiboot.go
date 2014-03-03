@@ -1,6 +1,11 @@
 // Copyright 2014 by Thorsten von Eicken, see LICENSE in top-level directory
 
 // Booter for widuino - JeeBoot compatible boot loader
+// Listens to MQTT messages on topics /rf/<group_id>/<node_id>/rb and responds using the
+// corresponding .../tx topics.
+
+// TODO: this has lots of code overlap with udpgw.go, need to factor stuff out or use JeeBus
+// if that stabilizes...
 
 package main
 
@@ -232,64 +237,3 @@ func handleBoot(cc *mqtt.ClientConn, groupId, nodeId byte, msg *RFMessage, data 
                 log.Printf("Unknown boot message with kind=%s", msg.Kind)
         }
 }
-
-/*
-//===== Decode UDP packet into MQTT message
-
-func decode(mqtt *mqtt.ClientConn, src *net.UDPAddr, pkt []byte) {
-        // Parse packet
-        code := pkt[0]
-        groupId := pkt[1]
-        nodeId := pkt[2] & 0x1f
-        ack := 0 // really need to decode pkt[2]
-        data := pkt[3:]
-
-        // Record the groupId -> addr mapping
-        saveGroupToAddr(groupId, src)
-
-        // Create the topic
-        if code > RF_Debug && code != RF_BootReply {
-                log.Printf("Dropping UDP packet due to unprocessable code=%d", code)
-                log.Printf("%#v", pkt[0:9])
-                return
-        }
-        // handle boot protocol
-        rxrb := "rx"
-        kind := ""
-        switch code {
-        case RF_Pairing:
-                rxrb = "rb"
-                kind = "pairing"
-        case RF_BootReq:
-                rxrb = "rb"
-                kind = "boot"
-        }
-        // handle packets with no source node id
-        switch code {
-        case RF_DataPush, RF_DataReq, RF_AckBcast, RF_BootReply, RF_Debug:
-                nodeId = 0
-        }
-        // finally the topic
-        topic := fmt.Sprintf("/rf/%d/%d/%s", groupId, nodeId, rxrb)
-
-        // Create the payload
-        payload, _ := json.Marshal(RFMessage{
-                AsOf:   time.Now().UnixNano() / 1000000, // Javascript time: milliseconds
-                Base64: base64.StdEncoding.EncodeToString(data),
-                Kind:   kind,
-        })
-
-        // Send it off
-        mqtt.Publish(&proto.Publish{
-                Header:    proto.Header{QosLevel: proto.QosLevel(ack)},
-                TopicName: topic,
-                Payload:   proto.BytesPayload(payload),
-        })
-
-        // Log message, if appropriate
-        if code == 9 {
-                log.Printf("JeeUDP: %s", data)
-        }
-        log.Printf("MQTT PUB %s code=%d len=%d", topic, code, len(pkt))
-}
-*/

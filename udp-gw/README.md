@@ -16,48 +16,15 @@ rf12-udp-gw talk MQTT directly is three-fold: JSON encoding/decoding in a JeeNod
 MQTT protocol is no fun either, and the TCP stack of the EtherCard is unreliable for long
 lived connections.
 
+The udpgw uses "Raw RF Messages" as documented in ../README.md
 
-MQTT Messages
--------------
+UDP Packet Format
+-----------------
 
-The udp-gw produces standardized JSON MQTT messages as follows:
-
-### UDP -> MQTT
-
-Received data messages:
-* topic : `rf/<rf_group>/<src_node_id>/rx`
-* JSON value : `{_asof:<timestamp>, base64:<base64_payload>}`
-* QoS : as specified in wants-ACK RF flag
-
-Received boot messages:
-* topic : `io/udp-<local_port>/<remote_ip>-<remote_port>/<src_node_id>/rb` ("r*b*" as in "boot")
-* JSON value : `{_asof:<timestamp>, kind:<pkt_type>, base64:<base64_payload>}`
-* QoS : 0
-
-Where:
-* the `rx` topic is for application messages and `rb` is for boot protocol messages
-* `remote_*` refers to the rf12-udp-gw
-* `pkt_type` is either `pairing` or `boot`
-
-## MQTT -> UDP
-
-Sending data messages:
-* topic : `io/udp-<local_port>/<remote_ip>-<remote_port>/+/tx` where the `+` component is the destination node id or `null` to broadcast
-* JSON value : `{base64:<base64_payload>}`
-* QoS : turned into wants-ACK RF flag
-
-Sending boot messages:
-* topic : `io/udp-<local_port>/<remote_ip>-<remote_port>/+/tb`
-* JSON value : `{kind:<pkt_type>, base64:<base64_payload>}`
-* QoS : must be 0
-
-Where:
-* the `tx` topic is for application messages and `tb` is for boot protocol messages
-* `qos` mirrors the MQTT QoS and maps 0->no ACK, 1->ACK w/rexmit
-* `pkt_type` is either `pairing` or `boot`
-
-UDP Messages
-------------
+The UDP packet format is a very simple binary representation of the RFM12B packet format.
+Because UDP already provides a length as well as a CRC the corresponding RFM12B fields
+are omitted. The message type bits in the RFM12B node_id byte are separated off into a
+message type code byte. The result is as follows:
 
     Byte Content
       0  message type code
@@ -69,5 +36,7 @@ Where:
 - The type codes are as defined in the table above.
 - The group_id is redundant on transmission because the rf12-udp-gw is locked to one group, but
   it's useful on reception to detect what group the JeeNode is on.
+- The packet length is given in the UDP header
+- A CRC is calculated and checked as part of UDP transmission/reception
 
 

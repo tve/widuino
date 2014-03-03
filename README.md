@@ -43,3 +43,48 @@ nodes) listens to all RF traffic (promiscuious mode) and forwards all messages s
 "node->core" to the core. These messages are all broadcast type so they include a source node
 ID, which allows the core to figure out the message type and encoding based on the sketch being
 run by the node. Messages sent from the core to nodes use unicast (exceptions are possible).
+
+MQTT Raw RF Messages
+--------------------
+
+The purpose of the raw RF messages is to allow gateways to inject the information in the
+packets in pretty raw format so the next layer up can decode/encode those messages.
+
+The Raw RF messages represent the packets to/from RF nodes pretty directly, except that
+the various header fields are abstracted such that the MQTT messages are independent of
+the packet encoding and field details.
+
+### RF -> MQTT
+
+Received data messages:
+* topic : `rf/<rf_group>/<src_node_id>/rx`
+* JSON value : `{_asof:<timestamp>, base64:<base64_payload>}`
+* QoS : as specified in wants-ACK RF flag
+
+Received boot messages:
+* topic : `rf/<rf_group>/<src_node_id>/rb` ("r*b*" as in "boot")
+* JSON value : `{_asof:<timestamp>, kind:<pkt_type>, base64:<base64_payload>}`
+* QoS : 0
+
+Where:
+* the `rx` topic is for application messages and `rb` is for boot protocol messages
+* the `source_node_id` is 0 if it's unknown (due to pkt format limitations)
+* `pkt_type` is either `pairing` or `boot`
+
+## MQTT -> RF
+
+Sending data messages:
+* topic : `rf/<rf_group>/<dest_node_id>/tx`
+* JSON value : `{base64:<base64_payload>}`
+* QoS : turned into wants-ACK RF flag
+
+Sending boot messages:
+* topic : `rf/<rf_group>/<dest_node_id>/tb`
+* JSON value : `{kind:<pkt_type>, base64:<base64_payload>}`
+* QoS : must be 0
+
+Where:
+* the `tx` topic is for application messages and `tb` is for boot protocol messages
+* for data messages a `dest_node_id` of 0 causes a broadcast (for boot messages the pairing request and corresponding boot reply use node_id 0)
+* `qos` mirrors the MQTT QoS and maps 0->no ACK, 1->ACK w/rexmit
+* `pkt_type` is either `pairing` or `boot`

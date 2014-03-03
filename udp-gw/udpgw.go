@@ -1,6 +1,9 @@
 // Copyright 2014 by Thorsten von Eicken, see LICENSE in top-level directory
 
-// UDP GW for Widuino
+// UDP GW for Widuino, see README.md for details
+
+// TODO: this has lots of code overlap with wiboot.go, need to factor stuff out or use JeeBus
+// if that stabilizes...
 
 package main
 
