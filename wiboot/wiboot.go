@@ -1,6 +1,6 @@
 // Copyright 2014 by Thorsten von Eicken, see LICENSE in top-level directory
 
-// UDP GW for Widuino
+// Booter for widuino - JeeBoot compatible boot loader
 
 package main
 
