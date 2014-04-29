@@ -29,10 +29,10 @@
 //===== CUSTOMIZABLE CONFIGURATION =====
 
 #define LOG_UDP                 1       // log via UDP to hub router using debug messages
-#define LOG_SERIAL              1       // log on the serial port
+#define LOG_SERIAL              0       // log on the serial port
 
 #define DEBUG_UDP               0       // logs all UDP packets
-#define DEBUG_RF                1       // logs all RF packets
+#define DEBUG_RF                0       // logs all RF packets
 #define DEBUG_IP                0       // logs DHCP/ARP/IP assignment
 
 #define LED_RED_PORT            4       // JeeNode port for red LED
@@ -45,12 +45,36 @@
 #define RF12_19KBPS             0       // use slow data rate for long range
 #define RF12_RSSI               1       // 0:none, 1=analog RSSI, 2=digital RSSI
 
+#define IP_ADDR		{ 192, 168, 0, 99
+#define MAC_ADDR	{ 0x74,0x69,0x69,0x2D,0x30,0x99 }
+
+// TvE's UDP-GWs
+#if BOARD == 1		// settings for antenna udp-gw
+#define LED_RED_PORT            1       // JeeNode port for red LED
+#define LED_RCV_PORT            2       // JeeNode port for yellow/green LEDs
+#define RF12_GROUP           0x01       // Group 1
+#define IP_ADDR		{ 192, 168, 0, 24 }
+#define MAC_ADDR	{ 0x74,0x69,0x69,0x2D,0x30,0x24 }
+#elif BOARD == 2	// settings for debug udp-gw
+#define LED_RED_PORT            4       // JeeNode port for red LED
+#define LED_RCV_PORT            3       // JeeNode port for yellow/green LEDs
+#define RF12_GROUP           0xD4       // 0xD4 is JeeLabs' default group
+#define IP_ADDR		{ 192, 168, 0, 25 }
+#define MAC_ADDR	{ 0x74,0x69,0x69,0x2D,0x30,0x25 }
+#elif BOARD == 3	// settings for 3rd udp-gw
+#define LED_RED_PORT            4       // JeeNode port for red LED
+#define LED_RCV_PORT            3       // JeeNode port for yellow/green LEDs
+#define RF12_GROUP           0x02       // Group 2
+#define IP_ADDR		{ 192, 168, 0, 26 }
+#define MAC_ADDR	{ 0x74,0x69,0x69,0x2D,0x30,0x26 }
+#endif
+
 // my IP configuration
-static uint8_t my_ip[] = { 192, 168, 0, 25 };   // my IP address, statically assigned
-static byte mymac[] = { 0x74,0x69,0x69,0x2D,0x30,0x33 };
+static uint8_t my_ip[] = IP_ADDR;       // my IP address, statically assigned
+static byte mymac[]    = MAC_ADDR;
 
 // NTP server
-#define NTP 0                           // whether to do NTP or not
+#define NTP			0       // whether to do NTP or not
 #if NTP
 static byte ntpServer[] = { 192, 168, 0, 3 };
 static word ntpPort = 123;              // port on which NTP responds
@@ -296,6 +320,12 @@ void setup() {
   redLed.digiWrite(1);     // red ON
   delay(500);
 
+  Serial.print(F("RF12: b"));
+  Serial.print(RF12_BAND);
+  Serial.print(" g");
+  Serial.print(RF12_GROUP);
+  Serial.print(" i");
+  Serial.println(RF12_ID);
   rf12_initialize(RF12_ID, RF12_BAND, RF12_GROUP);
 #if RF12_LOWPOWER
   Serial.println(F("RF12: low TX power"));

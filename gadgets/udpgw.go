@@ -42,6 +42,26 @@ func (w *UDPGateway) Run() {
         }
 }
 
+// send a packet (here the flags are 0..7)
+func (w *UDPGateway) sendPacket(group, node, flags byte, data []byte) {
+	// find UDP gateway's address
+	addr := mapGroupToAddr(group)
+	if addr == nil {
+		glog.Warningf("No GW known for RF group %d", group)
+		return
+	}
+	// puts the UDP packet together
+	buf := make([]byte, len(data)+3)
+	buf[0] = flags                // message type code
+	buf[1] = group                // RF group
+	buf[2] = node                 // node id
+	copy(buf[3:], data)
+	// logging and sending
+	glog.V(2).Infof("Snd packet len=%d dst=%v node=%d", len(buf), addr, node);
+	glog.V(4).Infof("  Pkt=%#v", buf);
+	w.sock.WriteToUDP(buf, addr)
+}
+
 // Get packets to xmit, encode them, and ship them out
 func (w *UDPGateway) Transmitter() {
         for m := range w.Xmit {
@@ -50,24 +70,17 @@ func (w *UDPGateway) Transmitter() {
                 case int: // pulses DTR on serial line to reset
                 case bool: // sets/clears RTS
                 case []byte:
-                        // map the group_id to the appropriate UDP destination
-                        groupId := w.group // TODO: fix this
-                        addr := mapGroupToAddr(groupId)
-                        if addr == nil {
-                                glog.Warningf("No GW known for RF group %d", groupId)
-                                return
-                        }
-
-                        // actually send the packet
-                        buf := make([]byte, len(v)+2)
-                        buf[0] = v[0]>>5                // message type code
-                        buf[1] = groupId                // RF group
-                        buf[2] = v[0] & 0x1f            // node id
-                        copy(buf[3:], v[1:])
-                        glog.V(2).Infof("Snd packet len=%d dst=%v", len(buf), addr);
-                        glog.V(4).Infof("  Pkt=%#v", buf);
-                        w.sock.WriteToUDP(buf, addr)
+			// TODO: fix w.group
+			w.sendPacket(w.group, v[0] & 0x1f, v[0]>>5, v[1:])
                 }
+        }
+}
+
+func min(a, b int) int {
+        if a < b {
+                return a
+        } else {
+                return b
         }
 }
 
@@ -90,7 +103,6 @@ func (w *UDPGateway) Receiver() {
                         groupId := data[1]
                         nodeId := data[2]
 
-
                         // Record the groupId -> addr mapping
                         newGroup := saveGroupToAddr(groupId, pktSrc)
                         if newGroup {
@@ -107,7 +119,7 @@ func (w *UDPGateway) Receiver() {
                         switch flags {
                         case 5, 8: // CTL and ACK are set -> boot protocol, need to drop group/len from header
                                 glog.V(2).Infof("Got boot packet len=%d src=%v", pktLen, pktSrc);
-                                glog.V(4).Infof("  Pkt=%#v", data);
+                                glog.V(4).Infof("  Pkt=%#v", data[0:min(len(data),10)]);
                                 w.Oob.Send(info)
                                 dd := data[2:]
                                 dd[0] = (flags << 5) | (nodeId & 0x1f)
@@ -115,8 +127,14 @@ func (w *UDPGateway) Receiver() {
                         case 9: // Special packet to log from UDG GW itself
                                 glog.V(1).Infof("UDP-GW: %s", string(data[3:]))
                         default: // standard data packet
-                                glog.V(2).Infof("Got packet len=%d src=%v", pktLen, pktSrc);
-                                glog.V(4).Infof("  Pkt=%#v", data);
+                                glog.V(2).Infof("Got packet len=%d src=%v node=%d",
+					pktLen, pktSrc, nodeId&0x1f);
+                                glog.V(4).Infof("  Pkt=%#v", data[0:min(len(data),10)]);
+				// If an ACK is requested we should send that asap
+				if flags & 1 != 0 {
+					w.sendPacket(groupId, nodeId, 0x6, []byte{})
+				}
+				// Now process the packet
                                 data[0] = (flags << 5) | (nodeId & 0x1f)
                                 data[2] = byte( len(data)-3 )
                                 w.Recv.Send(info)
