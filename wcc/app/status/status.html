@@ -1,0 +1,34 @@
+
+<div class="row">
+  <div class="large-10 columns">
+    <h3>Readings</h3>
+  </div>
+  <div class="large-2 columns">
+    <h3>
+      <!-- for vertical alignment-->
+    </h3>
+    <input type="text" ng-model="shared.statusQuery" placeholder="Search..."/>
+  </div>
+  <div class="large-12 columns">
+    <table>
+      <tr>
+        <th>Location</th>
+        <th>Parameter</th>
+        <th>Value</th>
+        <th>Unit</th>
+        <th>Time</th>
+        <th>Type</th>
+        <th>Id</th>
+      </tr>
+      <tr ng-repeat="r in readings | filter:shared.statusQuery | orderBy:&quot;loc&quot;                     track by r.id" highlight-on-change="r.ms">
+        <td align="right">{{r.loc}}</td>
+        <td>{{r.param}}</td>
+        <td align="right">{{r.value}}</td>
+        <td>{{r.unit}}</td>
+        <td>{{r.ms | date:"MM-dd HH:mm:ss"}}</td>
+        <td>{{r.typ}}</td>
+        <td>{{r.id}}</td>
+      </tr>
+    </table>
+  </div>
+</div>

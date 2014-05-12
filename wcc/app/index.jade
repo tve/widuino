@@ -1,0 +1,23 @@
+extends ../../jeebus/base/layout
+
+//- block vars
+//- block title
+
+append styles
+  link(rel='stylesheet',href='/style.css')
+
+//- block nav
+//- block main
+//- block footer
+
+prepend vendor
+  script console.log('BEFORE vendor');
+
+//- block startup
+
+append scripts
+  script console.log('AFTER scripts');
+  script(src='/base/vendor/ee3.js')
+  script(src='/demo/demo.js')
+  script(src='/status/status.js')
+  script(src='/data/data.js')

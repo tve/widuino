@@ -1,0 +1,18 @@
+.hover:hover {
+  background: #d3d3d3;
+}
+.highlight-add {
+  -webkit-transition: 1s linear all;
+  -moz-transition: 1s linear all;
+  -o-transition: 1s linear all;
+  transition: 1s linear all;
+}
+.highlight-add {
+  background: #ffffbf !important;
+}
+.highlight-add.highlight-add-active {
+  background: #fff !important;
+}
+table tr:nth-of-type(even).highlight-add.highlight-add-active {
+  background: #f9f9f9 !important;
+}

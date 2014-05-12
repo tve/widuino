@@ -1,0 +1,693 @@
+{
+    "main": {
+        "gadgets": [
+            {
+                "name": "http",
+                "type": "HTTPServer"
+            },
+            {
+                "name": "init",
+                "type": "init"
+            }
+        ],
+        "feeds": [
+            {
+                "tag": "/",
+                "data": "./app",
+                "to": "http.Handlers"
+            },
+            {
+                "tag": "/base/",
+                "data": "./base",
+                "to": "http.Handlers"
+            },
+            {
+                "tag": "/ws",
+                "data": "<websocket>",
+                "to": "http.Handlers"
+            },
+            {
+                "data": ":3000",
+                "to": "http.Port"
+            }
+        ]
+    },
+    "init": {
+        "gadgets": [
+            {
+                "name": "mqtt",
+                "type": "MQTTServer"
+            },
+            {
+                "name": "sub",
+                "type": "DataSub"
+            },
+            {
+                "name": "pub",
+                "type": "MQTTPub"
+            },
+            {
+                "name": "dummy",
+                "type": "Pipe"
+            },
+            {
+                "name": "driverFill",
+                "type": "driverFill"
+            },
+            {
+                "name": "tableFill",
+                "type": "tableFill"
+            },
+            {
+                "name": "sub2",
+                "type": "DataSub"
+            },
+            {
+                "name": "aggr",
+                "type": "Aggregator"
+            },
+            {
+                "name": "db",
+                "type": "LevelDB"
+            },
+            {
+                "name": "udpgw",
+                "type": "udpgw"
+            }
+        ],
+        "wires": [
+            {
+                "from": "mqtt.PortOut",
+                "to": "pub.Port"
+            },
+            {
+                "from": "sub.Out",
+                "to": "pub.In"
+            },
+            {
+                "from": "sub2.Out",
+                "to": "aggr.In"
+            },
+            {
+                "from": "aggr.Out",
+                "to": "db.In"
+            }
+        ],
+        "feeds": [
+            {
+                "data": ":1883",
+                "to": "mqtt.Port"
+            },
+            {
+                "data": "/",
+                "to": "sub.In"
+            },
+            {
+                "data": "sensor/",
+                "to": "sub2.In"
+            }
+        ],
+        "labels": [
+            {
+                "external": "In",
+                "internal": "dummy.In"
+            },
+            {
+                "external": "Out",
+                "internal": "dummy.Out"
+            }
+        ]
+    },
+    "WebSocket-jeebus": {
+        "gadgets": [
+            {
+                "name": "rpc",
+                "type": "RpcHandler"
+            }
+        ],
+        "labels": [
+            {
+                "external": "In",
+                "internal": "rpc.In"
+            },
+            {
+                "external": "Out",
+                "internal": "rpc.Out"
+            }
+        ]
+    },
+    "udpgw": {
+        "gadgets": [
+            {
+                "name": "udp",
+                "type": "UDP-Gateway"
+            },
+            {
+                "name": "f1",
+                "type": "FanOut"
+            },
+            {
+                "name": "lg",
+                "type": "Logger"
+            },
+            {
+                "name": "db",
+                "type": "rf12toDatabase"
+            },
+            {
+                "name": "jb",
+                "type": "Booter"
+            }
+        ],
+        "wires": [
+            {
+                "from": "udp.Recv",
+                "to": "f1.In"
+            },
+            {
+                "from": "f1.Out:lg",
+                "to": "lg.In"
+            },
+            {
+                "from": "f1.Out:db",
+                "to": "db.In"
+            },
+            {
+                "from": "udp.Oob",
+                "to": "jb.In"
+            },
+            {
+                "from": "jb.Out",
+                "to": "udp.Xmit"
+            }
+        ],
+        "feeds": [
+            {
+                "data": 9999,
+                "to": "udp.Port"
+            },
+            {
+                "data": "./logger",
+                "to": "lg.Dir"
+            }
+        ]
+    },
+    "Booter": {
+        "gadgets": [
+            {
+                "name": "jb",
+                "type": "JeeBoot"
+            },
+            {
+                "name": "wf",
+                "type": "WatchFile"
+            },
+            {
+                "name": "cf",
+                "type": "ReadFileJSON"
+            },
+            {
+                "name": "rd",
+                "type": "ReadFileText"
+            },
+            {
+                "name": "hx",
+                "type": "IntelHexToBin"
+            },
+            {
+                "name": "bf",
+                "type": "BinaryFill"
+            },
+            {
+                "name": "cs",
+                "type": "CalcCrc16"
+            },
+            {
+                "name": "bd",
+                "type": "BootData"
+            }
+        ],
+        "wires": [
+            {
+                "from": "cf.Out",
+                "to": "jb.Cfg"
+            },
+            {
+                "from": "jb.Files",
+                "to": "wf.In"
+            },
+            {
+                "from": "wf.Out",
+                "to": "rd.In"
+            },
+            {
+                "from": "rd.Out",
+                "to": "hx.In"
+            },
+            {
+                "from": "hx.Out",
+                "to": "bf.In"
+            },
+            {
+                "from": "bf.Out",
+                "to": "cs.In"
+            },
+            {
+                "from": "cs.Out",
+                "to": "bd.In"
+            }
+        ],
+        "labels": [
+            {
+                "external": "In",
+                "internal": "jb.In"
+            },
+            {
+                "external": "Out",
+                "internal": "jb.Out"
+            }
+        ],
+        "feeds": [
+            {
+                "data": "jeeboot.json",
+                "to": "cf.In"
+            },
+            {
+                "data": 64,
+                "to": "bf.Len"
+            }
+        ]
+    },
+    "nodesWCC": {
+        "gadgets": [
+            {
+                "name": "nm",
+                "type": "NodeMap"
+            },
+            {
+                "name": "di",
+                "type": "PacketMapDispatcher"
+            }
+        ],
+        "feeds": [
+            {
+                "data": "sketch",
+                "to": "di.Field"
+            },
+            {
+                "data": "Sketch-",
+                "to": "di.Prefix"
+            },
+            {
+                "data": "RFg212i14,tempNode,desk",
+                "to": "nm.Info"
+            }
+        ],
+        "wires": [
+            {
+                "from": "nm.Out",
+                "to": "di.In"
+            }
+        ],
+        "labels": [
+            {
+                "external": "In",
+                "internal": "nm.In"
+            },
+            {
+                "external": "Out",
+                "internal": "di.Out"
+            }
+        ]
+    },
+    "modules": {
+        "gadgets": [
+            {
+                "name": "mi",
+                "type": "ModuleIdent"
+            },
+            {
+                "name": "mm",
+                "type": "ModuleMap"
+            },
+            {
+                "name": "di",
+                "type": "PacketMapDispatcher"
+            }
+        ],
+        "wires": [
+            {
+                "from": "mi.Out",
+                "to": "mm.In"
+            },
+            {
+                "from": "mm.Out",
+                "to": "di.In"
+            }
+        ],
+        "feeds": [
+            {
+                "data": "1,Net",
+                "to": "mm.Info"
+            },
+            {
+                "data": "2,Log",
+                "to": "mm.Info"
+            },
+            {
+                "data": "4,OwTemp",
+                "to": "mm.Info"
+            },
+            {
+                "data": "module_name",
+                "to": "di.Field"
+            },
+            {
+                "data": "Module-",
+                "to": "di.Prefix"
+            }
+        ],
+        "labels": [
+            {
+                "external": "In",
+                "internal": "mi.In"
+            },
+            {
+                "external": "Out",
+                "internal": "di.Out"
+            }
+        ]
+    },
+    "rf12toDatabase": {
+        "gadgets": [
+            {
+                "name": "ni",
+                "type": "nodesWCC"
+            },
+            {
+                "name": "mm",
+                "type": "modules"
+            },
+            {
+                "name": "dd",
+                "type": "DebugLog"
+            },
+            {
+                "name": "ss",
+                "type": "PutReadings"
+            },
+            {
+                "name": "f2",
+                "type": "FanOut"
+            },
+            {
+                "name": "sr",
+                "type": "SplitReadings"
+            },
+            {
+                "name": "db",
+                "type": "LevelDB"
+            },
+            {
+                "name": "d2",
+                "type": "DebugLog"
+            }
+        ],
+        "wires": [
+            {
+                "from": "ni.Out",
+                "to": "mm.In"
+            },
+            {
+                "from": "mm.Out",
+                "to": "dd.In"
+            },
+            {
+                "from": "dd.Out",
+                "to": "ss.In"
+            },
+            {
+                "from": "ss.Out",
+                "to": "f2.In"
+            },
+            {
+                "from": "f2.Out:sr",
+                "to": "sr.In"
+            },
+            {
+                "from": "f2.Out:db",
+                "to": "d2.In"
+            },
+            {
+                "from": "sr.Out",
+                "to": "d2.In"
+            },
+            {
+                "from": "d2.Out",
+                "to": "db.In"
+            }
+        ],
+        "labels": [
+            {
+                "external": "In",
+                "internal": "ni.In"
+            }
+        ]
+    },
+    "serial": {
+        "gadgets": [
+            {
+                "name": "sp",
+                "type": "SerialPort"
+            },
+            {
+                "name": "ts",
+                "type": "TimeStamp"
+            },
+            {
+                "name": "f1",
+                "type": "FanOut"
+            },
+            {
+                "name": "lg",
+                "type": "Logger"
+            },
+            {
+                "name": "db",
+                "type": "rf12toDatabase"
+            }
+        ],
+        "wires": [
+            {
+                "from": "sp.From",
+                "to": "ts.In"
+            },
+            {
+                "from": "ts.Out",
+                "to": "f1.In"
+            },
+            {
+                "from": "f1.Out:lg",
+                "to": "lg.In"
+            },
+            {
+                "from": "f1.Out:db",
+                "to": "db.In"
+            }
+        ],
+        "feeds": [
+            {
+                "data": "/dev/tty.usbserial-A901ROSN",
+                "to": "sp.Port"
+            },
+            {
+                "data": "./logger",
+                "to": "lg.Dir"
+            }
+        ]
+    },
+    "demo": {
+        "gadgets": [
+            {
+                "name": "c",
+                "type": "Clock"
+            }
+        ],
+        "feeds": [
+            {
+                "data": "1s",
+                "to": "c.Rate"
+            }
+        ]
+    },
+    "driverFill": {
+        "gadgets": [
+            {
+                "name": "db",
+                "type": "LevelDB"
+            }
+        ],
+        "feeds": [
+            {
+                "to": "db.In",
+                "tag": "/driver/tempNode/temp",
+                "data": {
+                    "name": "Temperature",
+                    "unit": "°F",
+                    "scale": 1
+                }
+            }
+        ]
+    },
+    "tableFill": {
+        "gadgets": [
+            {
+                "name": "db",
+                "type": "LevelDB"
+            }
+        ],
+        "feeds": [
+            {
+                "to": "db.In",
+                "tag": "/table/table",
+                "data": {
+                    "attr": "id attr"
+                }
+            },
+            {
+                "to": "db.In",
+                "tag": "/column/table/id",
+                "data": {
+                    "name": "Ident"
+                }
+            },
+            {
+                "to": "db.In",
+                "tag": "/column/table/attr",
+                "data": {
+                    "name": "Attributes"
+                }
+            },
+            {
+                "to": "db.In",
+                "tag": "/table/column",
+                "data": {
+                    "attr": "id name"
+                }
+            },
+            {
+                "to": "db.In",
+                "tag": "/column/column/id",
+                "data": {
+                    "name": "Ident"
+                }
+            },
+            {
+                "to": "db.In",
+                "tag": "/column/column/name",
+                "data": {
+                    "name": "Name"
+                }
+            },
+            {
+                "to": "db.In",
+                "tag": "/table/driver",
+                "data": {
+                    "attr": "id name unit factor scale"
+                }
+            },
+            {
+                "to": "db.In",
+                "tag": "/column/driver/id",
+                "data": {
+                    "name": "Parameter"
+                }
+            },
+            {
+                "to": "db.In",
+                "tag": "/column/driver/name",
+                "data": {
+                    "name": "Name"
+                }
+            },
+            {
+                "to": "db.In",
+                "tag": "/column/driver/unit",
+                "data": {
+                    "name": "Unit"
+                }
+            },
+            {
+                "to": "db.In",
+                "tag": "/column/driver/factor",
+                "data": {
+                    "name": "Factor"
+                }
+            },
+            {
+                "to": "db.In",
+                "tag": "/column/driver/scale",
+                "data": {
+                    "name": "Scale"
+                }
+            },
+            {
+                "to": "db.In",
+                "tag": "/table/reading",
+                "data": {
+                    "attr": "id loc val ms typ"
+                }
+            },
+            {
+                "to": "db.In",
+                "tag": "/column/reading/id",
+                "data": {
+                    "name": "Ident"
+                }
+            },
+            {
+                "to": "db.In",
+                "tag": "/column/reading/loc",
+                "data": {
+                    "name": "Location"
+                }
+            },
+            {
+                "to": "db.In",
+                "tag": "/column/reading/val",
+                "data": {
+                    "name": "Values"
+                }
+            },
+            {
+                "to": "db.In",
+                "tag": "/column/reading/ms",
+                "data": {
+                    "name": "Timestamp"
+                }
+            },
+            {
+                "to": "db.In",
+                "tag": "/column/reading/typ",
+                "data": {
+                    "name": "Type"
+                }
+            }
+        ]
+    },
+    "try1": {
+        "gadgets": [
+            {
+                "name": "db",
+                "type": "LevelDB"
+            }
+        ],
+        "feeds": [
+            {
+                "tag": "<range>",
+                "data": "/reading/",
+                "to": "db.In"
+            }
+        ]
+    }
+}

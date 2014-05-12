@@ -20,7 +20,7 @@ typedef struct {
   uint8_t   data[RF12_MAXDATA];
 } net_packet;
 #ifndef NET_PKT
-#define NET_PKT        2                // number of packet buffers allocated
+#define NET_PKT        3                // number of packet buffers allocated
 #endif
 
 // Global variables that are managed by the network module
@@ -76,6 +76,11 @@ public:
   // send and receive)
   // @return the first byte (module_id) of a received packet, 0 when there's no packet
   uint8_t poll(void);
+
+  // Flush any queued packets and wait for ACKs until they come in or time out.
+  // @return 0 when there are no more packets queued and nothing has been received.
+  // Returns the module ID (first byte of packet) if a packet came in.
+  uint8_t Net::flush(void);
 
   void reXmit(void);
 

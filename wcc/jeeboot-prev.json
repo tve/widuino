@@ -1,0 +1,14 @@
+{
+    "swids": {
+        "1005": "/home/arduino/widuino/nodes/servo_test/servo_test.hex",
+        "1010": "/home/arduino/widuino/nodes/temp_node/temp_node.hex"
+    },
+    "hwids": {
+        "b4a667a2545f4d458492d517c7185035": {
+            "board": 1,
+            "group": 212,
+            "node": 14,
+            "swid": 1010
+        }
+    }
+}

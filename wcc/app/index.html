@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <style>[ng-cloak] { display: none; }</style>
+    <title>JeeBus</title>
+    <link rel="stylesheet" href="/base/vendor/bower-foundation-css/foundation.min.css">
+    <link rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css">
+    <link rel="stylesheet" href="/base/circedit.css">
+    <link rel="stylesheet" href="/style.css">
+  </head>
+  <body ng-cloak ng-app="myApp">
+    <nav ng-controller="NavCtrl" class="top-bar">
+      <ul class="title-area">
+        <li class="name">
+          <h1><a ng-href="{{appInfo.home}}"><img src="/base/logo.png" height="22" width="22">&nbsp; {{appInfo.name}}</a></h1>
+        </li>
+        <li class="toggle-topbar menu-icon"><a href="#"><span></span></a></li>
+      </ul>
+      <section class="top-bar-section">
+        <ul class="left">
+          <li ng-repeat="nav in navbar" class="myNav"><a ng-href="{{nav.route}}">{{nav.title}}</a></li>
+          <li class="divider"></li>
+        </ul>
+        <ul class="right">
+          <li class="myNav"><a href="/admin">Admin</a></li>
+        </ul>
+      </section>
+    </nav>
+    <div ui-view></div>
+    <div class="row">
+      <div class="large-3 columns">
+        <p class="secondary label">Version {{appInfo.version}}</p>
+      </div>
+      <div class="large-3 columns">
+        <p class="secondary label">Server {{serverStatus}}</p>
+      </div>
+    </div>
+    <script src="/base/vendor/angular/angular.js"></script>
+    <script>console.log('BEFORE vendor');</script>
+    <script src="/base/vendor/angular-ui-router.min.js"></script>
+    <script src="/base/vendor/angular-animate/angular-animate.min.js"></script>
+    <script src="/base/vendor/angular-foundation/mm-foundation-tpls.min.js"></script>
+    <script src="/base/vendor/d3/d3.min.js"></script>
+    <script src="/startup.js"></script>
+    <script src="/base/circedit.js"></script>
+    <script src="/base/jeebus.js"></script>
+    <script src="/base/nav.js"></script>
+    <script>console.log('AFTER scripts');</script>
+    <script src="/base/vendor/ee3.js"></script>
+    <script src="/demo/demo.js"></script>
+    <script src="/status/status.js"></script>
+    <script src="/data/data.js"></script>
+  </body>
+</html>

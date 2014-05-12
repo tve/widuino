@@ -1,0 +1,26 @@
+.row
+  .large-10.columns
+    h3 Readings
+  .large-2.columns
+    h3: // for vertical alignment
+    input(type='text',ng-model='shared.statusQuery',placeholder='Search...')
+
+  .large-12.columns
+    table
+      tr
+        th Location
+        th Parameter
+        th Value
+        th Unit
+        th Time
+        th Type
+        th Id
+      tr(ng-repeat='r in readings | filter:shared.statusQuery | orderBy:"loc" \
+                    track by r.id' highlight-on-change='r.ms')
+        td(align='right') {{r.loc}}
+        td {{r.param}}
+        td(align='right') {{r.value}}
+        td {{r.unit}}
+        td {{r.ms | date:"MM-dd HH:mm:ss"}}
+        td {{r.typ}}
+        td {{r.id}}

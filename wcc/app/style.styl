@@ -1,0 +1,24 @@
+// .top-bar
+//   margin-bottom: 0
+
+.hover:hover
+  background lightgrey
+
+.highlight-add
+  -webkit-transition 1s linear all
+  -moz-transition 1s linear all
+  -o-transition 1s linear all
+  transition 1s linear all
+
+// the !important mark helps overrule the odd/even gray background
+
+.highlight-add
+  background lighten(yellow, 75%) !important
+
+.highlight-add.highlight-add-active
+  background white !important
+
+// special-cased override to fade back into the even-coloured table rows
+// see foundation.css:4489 (according to the Chrome/WebKit inspector)
+table tr:nth-of-type(even).highlight-add.highlight-add-active
+    background #f9f9f9 !important

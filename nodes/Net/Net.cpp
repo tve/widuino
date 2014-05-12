@@ -164,9 +164,22 @@ void Net::queueAck(byte dest_node) {
   queuedRssi = lastRcvRssi;
 }
 
+// Flush any queued packets and wait for ACKs until they come in or time out.
+// Returns 0 when there are no more packets queued and nothing has been received.
+// Returns the module ID (first byte of packet) if a packet came in
+uint8_t Net::flush(void) {
+  while (bufCnt > 0 || queuedAck) {
+    uint8_t m = poll();
+    if (m) return m;
+    delay(1);
+  }
+  return 0;
+}
+
 // Poll the rf12 network and return true if a packet has been received
 // ACKs are processed automatically (and are expected not to have data,
 // but do include the RSSI to make for simple round-trip measurements)
+extern Port led;
 uint8_t Net::poll(void) {
 #ifndef NET_NONE
   bool rcv = rf12_recvDone();
@@ -184,6 +197,7 @@ uint8_t Net::poll(void) {
       // Ack packet, check that it's for us and that we're waiting for an ACK
       //Serial.print("Got ACK for "); Serial.println(rf12_hdr, 16);
       getRssi();
+      led.digiWrite(HIGH);
       if ((rf12_hdr&RF12_HDR_MASK) == node_id && bufCnt > 0 && sendCnt > 0) {
         lastAckRssi = rf12_len == 1 ? rf12_data[0] : 0;
         // pop packet from queue
@@ -195,7 +209,7 @@ uint8_t Net::poll(void) {
       }
     }
   } else if (rcv && rf12_crc != 0) {
-    //Serial.println("Got packet with bad CRC");
+    Serial.println("RF12 bad CRC");
   }
 
   reXmit();

@@ -1,13 +1,23 @@
 // Copyright 2014 by Thorsten von Eicken, see LICENSE in top-level directory
 
 // UDP GW JeeBus flow gadget for Widuino, see README.md for details
+// The message emitted for received packets has the form:
+// PacketMap{
+//   "rf12demo": g%db%di%d" (group/band/id)
+//   "group": int,
+//   "band" : int, // TODO: get the band from the GW sketch
+//   "node" : int,
+//   "type" : int, (3 packet type bits from header byte)
+//   "raw"  : []byte,
+// }
 
-package network
+package widuino
 
 import (
         "fmt"
         "net"
         "sync"
+        "time"
 
         "github.com/golang/glog"
         "github.com/jcw/flow"
@@ -57,8 +67,9 @@ func (w *UDPGateway) sendPacket(group, node, flags byte, data []byte) {
 	buf[2] = node                 // node id
 	copy(buf[3:], data)
 	// logging and sending
-	glog.V(2).Infof("Snd packet len=%d dst=%v node=%d", len(buf), addr, node);
-	glog.V(4).Infof("  Pkt=%#v", buf);
+	glog.V(1).Infof("Send: %+v", buf)
+	glog.V(2).Infof("Snd packet len=%d dst=%v node=%d", len(buf), addr, node)
+	glog.V(4).Infof("  Pkt=%#v", buf)
 	w.sock.WriteToUDP(buf, addr)
 }
 
@@ -95,10 +106,14 @@ func (w *UDPGateway) Receiver() {
                         continue
                 }
                 data := pkt[0:pktLen]
-                if pktLen < 4 {
+                switch {
+                case pktLen < 3:
                         glog.Infof("UDP: got too short a packet (%d) from %v", pktLen, pktSrc)
                         w.Rej.Send(data)
-                } else {
+                case pktLen > 66+3:
+                        glog.Infof("UDP: got too long a packet (%d) from %v", pktLen, pktSrc)
+                        w.Rej.Send(data)
+                default:
                         flags := data[0]
                         groupId := data[1]
                         nodeId := data[2]
@@ -107,38 +122,74 @@ func (w *UDPGateway) Receiver() {
                         newGroup := saveGroupToAddr(groupId, pktSrc)
                         if newGroup {
                                 w.group = groupId
+                                /*
                                 hack := map[string]int{
                                         "<RF12demo>": 12, "band": 915,
                                         "group": int(groupId), "id": 31,
                                 }
                                 w.Recv.Send(hack)
+                                */
                         }
 
-                        // Now mimick RF12demo, sigh
-                        info := map[string]int{"<node>": int(nodeId)}
                         switch flags {
-                        case 5, 8: // CTL and ACK are set -> boot protocol, need to drop group/len from header
-                                glog.V(2).Infof("Got boot packet len=%d src=%v", pktLen, pktSrc);
-                                glog.V(4).Infof("  Pkt=%#v", data[0:min(len(data),10)]);
+                        // CTL and ACK are set -> boot protocol
+                        // need to produce a rf12demo look-alike packet with pkt[0]=hdr byte
+                        // followed by data bytes
+                        case 5, 8:
+                                info := map[string]int{"<node>": int(nodeId)}
+                                glog.V(1).Infoln("*****")
+                                glog.V(1).Infof("Boot: %+v", info)
+                                glog.V(2).Infof("Got boot packet len=%d src=%v", pktLen, pktSrc)
+                                glog.V(4).Infof("  Pkt=%#v", data[0:min(len(data),10)])
                                 w.Oob.Send(info)
                                 dd := data[2:]
                                 dd[0] = (flags << 5) | (nodeId & 0x1f)
+                                glog.V(1).Infof("Boot: %+v", dd)
                                 w.Oob.Send(dd)
-                        case 9: // Special packet to log from UDG GW itself
-                                glog.V(1).Infof("UDP-GW: %s", string(data[3:]))
-                        default: // standard data packet
+                        // Special packet to log from UDP GW itself
+                        case 9:
+                                glog.Infof("UDP-GW: %s", string(data[3:]))
+                        // standard data packet, produce a packet map
+                        // map: rf12demo->g212b3i1, group->int, band->int, node->int,
+                        //      type->byte, raw->[]byte
+                        default:
+				// Now process the packet
+                                pkt := flow.PacketMap{
+                                        "rf12" : fmt.Sprintf("RFg%di%d", groupId, nodeId),
+                                        "group": groupId,
+                                        "band" : 9, // TODO: get the band from the GW sketch
+                                        "node" : nodeId,
+                                        "type" : flags,
+                                        "raw"  : data[2:],
+                                        "asof" : time.Now(),
+                                }
+                                glog.V(1).Infoln("*****")
+                                glog.V(1).Infof("Recv: %+v", pkt)
                                 glog.V(2).Infof("Got packet len=%d src=%v node=%d",
-					pktLen, pktSrc, nodeId&0x1f);
-                                glog.V(4).Infof("  Pkt=%#v", data[0:min(len(data),10)]);
+					pktLen, pktSrc, nodeId&0x1f)
+                                glog.V(4).Infof("  Pkt=%#v", data[0:min(len(data),10)])
+				// If an ACK is requested we should send that asap
+				if flags & 1 != 0 {
+					w.sendPacket(groupId, nodeId, 0x6, []byte{})
+				}
+                                // Now process what we got
+                                w.Recv.Send(pkt)
+/*
+                        // standard data packet, prodce multiple messages like rf12demo does
+                        default:
+                                glog.V(2).Infof("Got packet len=%d src=%v node=%d",
+					pktLen, pktSrc, nodeId&0x1f)
+                                glog.V(4).Infof("  Pkt=%#v", data[0:min(len(data),10)])
 				// If an ACK is requested we should send that asap
 				if flags & 1 != 0 {
 					w.sendPacket(groupId, nodeId, 0x6, []byte{})
 				}
 				// Now process the packet
-                                data[0] = (flags << 5) | (nodeId & 0x1f)
-                                data[2] = byte( len(data)-3 )
+                                dd := data[2:]
+                                dd[0] = (flags << 5) | (nodeId & 0x1f)
                                 w.Recv.Send(info)
-                                w.Recv.Send(data)
+                                w.Recv.Send(dd)
+ */
                         }
                 }
         }
