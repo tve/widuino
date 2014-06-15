@@ -1,0 +1,1 @@
+node . -logtostderr=true -vmodule="nodes=2,http=4,rpc=2,circuit=1,owTemp=2,database=4,rpc=1"

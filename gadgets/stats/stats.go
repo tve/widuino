@@ -27,11 +27,11 @@ type Aggregator struct {
 }
 
 type accumulator struct {
-	Num  int `json:"n"`
-	Low  int `json:"l"`
-	High int `json:"h"`
+	Num  float64 `json:"n"`
+	Low  float64 `json:"l"`
+	High float64 `json:"h"`
 	// StdDev int   `json:"d"`
-	Sum int64 `json:"s"`
+	Sum  float64 `json:"s"`
 
 	// m2  int64
 	slot int
@@ -59,7 +59,7 @@ func (g *Aggregator) Run() {
 				prefix := t.Tag[:n+1]
 				ms, err := strconv.ParseInt(t.Tag[n+1:], 10, 64)
 				flow.Check(err)
-				g.process(prefix, ms, t.Msg.(int))
+				g.process(prefix, ms, t.Msg.(float64))
 			}
 		}
 	}
@@ -69,7 +69,7 @@ func (g *Aggregator) Run() {
 	}
 }
 
-func (g *Aggregator) process(prefix string, ms int64, val int) {
+func (g *Aggregator) process(prefix string, ms int64, val float64) {
 	slot := int(ms / g.stepMs)
 	accum, ok := g.stats[prefix]
 	if !ok || slot != accum.slot {
@@ -79,7 +79,7 @@ func (g *Aggregator) process(prefix string, ms int64, val int) {
 		accum = accumulator{slot: slot, Low: val, High: val}
 	}
 	accum.Num++
-	accum.Sum += int64(val)
+	accum.Sum += float64(val)
 	if val < accum.Low {
 		accum.Low = val
 	}

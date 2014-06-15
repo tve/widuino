@@ -6,15 +6,15 @@ import (
 	"strings"
 	"time"
 
-        "github.com/golang/glog"
+	"github.com/golang/glog"
 	"github.com/jcw/flow"
 	"github.com/jcw/jeebus/gadgets"
 )
 
 func init() {
-	flow.Registry["NodeMap"] = func() flow.Circuitry { return &NodeMap{} }
-	flow.Registry["PutReadings"] = func() flow.Circuitry { return &PutReadings{} }
-	flow.Registry["SplitReadings"] = func() flow.Circuitry { return &SplitReadings{} }
+	flow.Registry["NodeMapM"] = func() flow.Circuitry { return &NodeMap{} }
+	flow.Registry["PutReadingsM"] = func() flow.Circuitry { return &PutReadings{} }
+	flow.Registry["SplitReadingsM"] = func() flow.Circuitry { return &SplitReadings{} }
 }
 
 // Lookup the group/node information to determine what sketch the node is running.
@@ -25,10 +25,10 @@ func init() {
 // Registers as "NodeMap".
 type NodeMap struct {
 	flow.Gadget
-	Info flow.Input         // expects strings of the form RFg00i00,<location>
-	In   flow.Input         // expects PacketMaps with group:int and node:int fields
-	Out  flow.Output        // outputs PacketMaps with added sketch:string and location:string
-	Rej  flow.Output        // outputs packets from nodes not found in the map
+	Info flow.Input  // expects strings of the form RFg00i00,<location>
+	In   flow.Input  // expects PacketMaps with group:int and node:int fields
+	Out  flow.Output // outputs PacketMaps with added sketch:string and location:string
+	Rej  flow.Output // outputs packets from nodes not found in the map
 }
 
 // Start looking up node ID's in the node map.
@@ -45,17 +45,17 @@ func (g *NodeMap) Run() {
 
 	for m := range g.In {
 		if pm, ok := m.(flow.PacketMap); ok {
-                        key := fmt.Sprintf("RFg%di%d", pm.Int("group"), pm.Int("node"))
-                        if loc, ok := locations[key]; ok {
-                                pm["location"] = loc
-                        }
-                        if sketch, ok := nodeMap[key]; ok {
-                                pm["sketch"] = sketch
-                                g.Out.Send(m)
-                                continue
+			key := fmt.Sprintf("RFg%di%d", pm.Int("group"), pm.Int("node"))
+			if loc, ok := locations[key]; ok {
+				pm["location"] = loc
+			}
+			if sketch, ok := nodeMap[key]; ok {
+				pm["sketch"] = sketch
+				g.Out.Send(m)
+				continue
 			}
 		}
-                g.Rej.Send(m)
+		g.Rej.Send(m)
 	}
 }
 
@@ -68,26 +68,26 @@ type PutReadings struct {
 
 // Convert each loosely structured reading object into a strict map for storage.
 func (g *PutReadings) Run() {
+	glog.V(2).Info("Starting PacketMap based PutReadings")
 	for m := range g.In {
-                pm, ok := m.(flow.PacketMap)
-                if !ok {
-                        continue
-                }
-                if _, ok := pm["readings"]; !ok {
-                        continue
-                }
+		pm, ok := m.(flow.PacketMap)
+		if !ok {
+			continue
+		}
+		if _, ok := pm["readings"]; !ok {
+			continue
+		}
 
 		values := pm["readings"].(map[string]float64)
 		if rssi, ok := pm["rssi"]; ok {
 			values["rssi"] = float64(rssi.(int))
 		}
-                asof := time.Now()
-                if _, ok := pm["asof"]; ok {
-                        asof = pm.Time("asof")
-                }
+		asof := time.Now()
+		if _, ok := pm["asof"]; ok {
+			asof = pm.Time("asof")
+		}
 
-
-                id := pm.String("rf12")
+		id := pm.String("rf12")
 		data := map[string]interface{}{
 			"ms":  jeebus.TimeToMs(asof),
 			"val": values,
@@ -95,7 +95,7 @@ func (g *PutReadings) Run() {
 			"typ": pm.String("decoder"),
 			"id":  id,
 		}
-                glog.V(2).Infof("PutReading /reading/%s: %+v", id, data)
+		glog.V(2).Infof("PutReading /reading/%s: %+v", id, data)
 		g.Out.Send(flow.Tag{"/reading/" + id, data})
 	}
 }

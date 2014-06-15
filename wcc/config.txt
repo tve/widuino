@@ -1,0 +1,2 @@
+JEEBUS_DIR = ./jeebus
+GADGETS_DIR = ../gadgets

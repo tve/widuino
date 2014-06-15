@@ -11,15 +11,15 @@
 package widuino
 
 import (
-        "strconv"
-        "strings"
-        "github.com/golang/glog"
-        "github.com/jcw/flow"
+	"github.com/golang/glog"
+	"github.com/jcw/flow"
+	"strconv"
+	"strings"
 )
 
 func init() {
-        flow.Registry["ModuleIdent"] = func() flow.Circuitry { return &ModuleIdent{} }
-        flow.Registry["ModuleMap"] = func() flow.Circuitry { return &ModuleMap{} }
+	flow.Registry["ModuleIdent"] = func() flow.Circuitry { return &ModuleIdent{} }
+	flow.Registry["ModuleMap"] = func() flow.Circuitry { return &ModuleMap{} }
 }
 
 //===== ModuleIdent =====
@@ -27,21 +27,21 @@ func init() {
 // Identify the module based on the first byte in the raw payload
 // Registers as "ModuleIdent"
 type ModuleIdent struct {
-        flow.Gadget
-        In   flow.Input         // Expects PacketMaps as input
-        Out  flow.Output        // Produces PacketMaps with "module": int added
+	flow.Gadget
+	In  flow.Input  // Expects PacketMaps as input
+	Out flow.Output // Produces PacketMaps with "module": int added
 }
 
 func (g *ModuleIdent) Run() {
-        for m := range g.In {
-                if v, ok := m.(flow.PacketMap); ok {
-                        v["module"] = int(v.Bytes("raw")[1])
-                        v["data"] = v.Bytes("raw")[2:]
-                        g.Out.Send(m)
-                } else {
-                        g.Out.Send(m)
-                }
-        }
+	for m := range g.In {
+		if v, ok := m.(flow.PacketMap); ok {
+			v["module"] = int(v.Bytes("raw")[1])
+			v["data"] = v.Bytes("raw")[2:]
+			g.Out.Send(m)
+		} else {
+			g.Out.Send(m)
+		}
+	}
 }
 
 //===== ModuleMap =====
@@ -50,9 +50,9 @@ func (g *ModuleIdent) Run() {
 // Registers as "ModuleMap".
 type ModuleMap struct {
 	flow.Gadget
-	Info flow.Input         // Expects strings with "id,name"
-	In   flow.Input         // Expects PacketMaps with "module":int field
-	Out  flow.Output        // Produces PacketMaps with "module_name":string added
+	Info flow.Input  // Expects strings with "id,name"
+	In   flow.Input  // Expects PacketMaps with "module":int field
+	Out  flow.Output // Produces PacketMaps with "module_name":string added
 }
 
 // Start looking up modules
@@ -60,21 +60,21 @@ func (w *ModuleMap) Run() {
 	moduleMap := map[int]string{}
 	for m := range w.Info {
 		f := strings.Split(m.(string), ",")
-                id, _ := strconv.Atoi(f[0])
+		id, _ := strconv.Atoi(f[0])
 		moduleMap[id] = f[1]
 	}
 
 	for m := range w.In {
-                if v, ok := m.(flow.PacketMap); ok {
-                        id := v.Int("module")
-                        if name, ok := moduleMap[id]; ok {
-                                v["module_name"] = name
-                        } else {
-                                glog.Warningf("Unknown module %d in packet %+v", id, m)
-                        }
-                        w.Out.Send(m)
-                } else {
-                        w.Out.Send(m)
-                }
-        }
+		if v, ok := m.(flow.PacketMap); ok {
+			id := v.Int("module")
+			if name, ok := moduleMap[id]; ok {
+				v["module_name"] = name
+			} else {
+				glog.V(1).Infof("Unknown module %d in packet %+v", id, m)
+			}
+			w.Out.Send(m)
+		} else {
+			w.Out.Send(m)
+		}
+	}
 }

@@ -4,16 +4,20 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/golang/glog"
 	"net/http"
 	"os"
 
 	"github.com/jcw/flow"
-	_ "github.com/tve/widuino/gadgets"
-	_ "github.com/tve/widuino/gadgets/decoders"
-	_ "github.com/tve/widuino/gadgets/stats"
 	_ "github.com/jcw/jeeboot/server/gadgets"
 	jeebus "github.com/jcw/jeebus/gadgets"
 	_ "github.com/tve/housemon/gadgets/rfdata"
+	_ "github.com/tve/widuino/gadgets"
+	_ "github.com/tve/widuino/gadgets/decoders"
+	_ "github.com/tve/widuino/gadgets/stats"
+
+	//"runtime/pprof"
+	_ "net/http/pprof"
 )
 
 var VERSION = "0.9.0" // can be adjusted by goxc at link time
@@ -35,7 +39,6 @@ SETUP_FILE  = ./setup.json
 func main() {
 	flag.Parse() // required, to set up the proper glog configuration
 	flow.LoadConfig(defaults, *config)
-	flow.DontPanic()
 
 	// register more definitions from a JSON-formatted setup file, if specified
 	if s := flow.Config["SETUP_FILE"]; s != "" {
@@ -54,7 +57,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("Starting webserver for http://%s/\n", flow.Config["HTTP_PORT"])
+	glog.Infof("Starting webserver for http://%s/\n", flow.Config["HTTP_PORT"])
 
 	// show intro page via a static webserver if the main app dir is absent
 	fd, err := os.Open(flow.Config["APP_DIR"])
@@ -68,6 +71,7 @@ func main() {
 
 	// normal startup: save config info in database and start the webserver
 	c := flow.NewCircuit()
+	flow.DontPanic(c)
 
 	// database setup, save current config settings, register init gadget
 	c.Add("db", "LevelDB")
@@ -90,6 +94,9 @@ func main() {
 
 	// webserver setup
 	c.Add("http", "HTTPServer")
+	c.Add("asink", "Sink")
+	c.Connect("http.Out", "asink.In", 0)
+	c.Feed("http.Handlers", flow.Tag{"DefaultMux", true})
 	c.Feed("http.Handlers", flow.Tag{"/", flow.Config["APP_DIR"]})
 	c.Feed("http.Handlers", flow.Tag{"/base/", flow.Config["BASE_DIR"]})
 	c.Feed("http.Handlers", flow.Tag{"/ws", "<websocket>"})

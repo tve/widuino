@@ -2,25 +2,12 @@
 
 circuits = {}
 
-# jeebus setup, stores in db and publishes on mqtt
-circuits.main =
-  gadgets: [
-    { name: "http", type: "HTTPServer" }
-    { name: "init", type: "init" }
-  ]
-  feeds: [
-    { tag: "/", data: "./app",  to: "http.Handlers" }
-    { tag: "/base/", data: "./base",  to: "http.Handlers" }
-    { tag: "/ws", data: "<websocket>",  to: "http.Handlers" }
-    { data: ":3000",  to: "http.Port" }
-  ]
-
 # init circuit for HouseMon, which starts its own http server.
 circuits.init =
   gadgets: [
-    { name: "mqtt", type: "MQTTServer" }
-    { name: "sub", type: "DataSub" }
-    { name: "pub", type: "MQTTPub" }
+    #{ name: "mqtt", type: "MQTTServer" }
+    #{ name: "sub", type: "DataSub" }
+    #{ name: "pub", type: "MQTTPub" }
     { name: "dummy", type: "Pipe" } # needed for dispatcher in HouseMon
     { name: "driverFill", type: "driverFill" } # pre-load the database
     { name: "tableFill", type: "tableFill" }   # pre-load the database
@@ -30,14 +17,14 @@ circuits.init =
     { name: "udpgw", type: "udpgw" }
   ]
   wires: [
-    { from: "mqtt.PortOut", to: "pub.Port" }
-    { from: "sub.Out", to: "pub.In" }
+    #{ from: "mqtt.PortOut", to: "pub.Port" }
+    #{ from: "sub.Out", to: "pub.In" }
     { from: "sub2.Out", to: "aggr.In" }
     { from: "aggr.Out", to: "db.In" }
   ]
   feeds: [
-    { data: ":1883",  to: "mqtt.Port" }
-    { data: "/",  to: "sub.In" }
+    #{ data: ":1883",  to: "mqtt.Port" }
+    #{ data: "/",  to: "sub.In" }
     { data: "sensor/",  to: "sub2.In" }
     # { data: "1m",  to: "aggr.Step" }
   ]
@@ -90,13 +77,13 @@ circuits["Booter"] =
     { name: "bd", type: "BootData" }
   ]
   wires: [
-    { from: "cf.Out", to: "jb.Cfg" }
-    { from: "jb.Files", to: "wf.In" }
-    { from: "wf.Out", to: "rd.In" }
-    { from: "rd.Out", to: "hx.In" }
-    { from: "hx.Out", to: "bf.In" }
-    { from: "bf.Out", to: "cs.In" }
-    { from: "cs.Out", to: "bd.In" }
+    { from: "cf.Out", to: "jb.Cfg", capacity: 10 }
+    { from: "jb.Files", to: "wf.In", capacity: 10 }
+    { from: "wf.Out", to: "rd.In", capacity: 10 }
+    { from: "rd.Out", to: "hx.In", capacity: 100 }
+    { from: "hx.Out", to: "bf.In", capacity: 100 }
+    { from: "bf.Out", to: "cs.In", capacity: 100 }
+    { from: "cs.Out", to: "bd.In", capacity: 100 }
   ]
   labels: [
     { external: "In", internal: "jb.In" }
@@ -110,7 +97,7 @@ circuits["Booter"] =
 # the node mapping for nodes at WCC, as pre-configured circuit
 circuits.nodesWCC =
   gadgets: [
-    { name: "nm", type: "NodeMap" }
+    { name: "nm", type: "NodeMapM" }
     { name: "di", type: "PacketMapDispatcher" }
   ]
   feeds: [
@@ -141,8 +128,8 @@ circuits.modules =
     { data: "1,Net",          to: "mm.Info" }
     { data: "2,Log",          to: "mm.Info" }
     { data: "4,OwTemp",       to: "mm.Info" }
-    { data: "module_name",    to: "di.Field" }
     { data: "Module-",        to: "di.Prefix" }
+    { data: "module_name",    to: "di.Field" }
   ]
   labels: [
     { external: "In",  internal: "mi.In" }
@@ -156,9 +143,9 @@ circuits.rf12toDatabase =
     { name: "ni", type: "nodesWCC" }
     { name: "mm", type: "modules" }
     { name: "dd", type: "DebugLog" }
-    { name: "ss", type: "PutReadings" }
+    { name: "ss", type: "PutReadingsM" }
     { name: "f2", type: "FanOut" }
-    { name: "sr", type: "SplitReadings" }
+    { name: "sr", type: "SplitReadingsM" }
     { name: "db", type: "LevelDB" }
     { name: "d2", type: "DebugLog" }
   ]
@@ -175,111 +162,6 @@ circuits.rf12toDatabase =
   ]
   labels: [
     { external: "In", internal: "ni.In" }
-  ]
-
-# this app runs a replay simulation with dynamically-loaded decoders
-#circuits.replay =
-#  gadgets: [
-#    { name: "lr", type: "LogReader" }
-#    { name: "rf", type: "Pipe" } # used to inject an "[RF12demo...]" line
-#    { name: "w1", type: "LogReplayer" }
-#    { name: "ts", type: "TimeStamp" }
-#    { name: "f1", type: "FanOut" }
-#    { name: "lg", type: "Logger" }
-#    { name: "db", type: "rf12toDatabase" }
-#  ]
-#  wires: [
-#    { from: "lr.Out", to: "w1.In" }
-#    { from: "rf.Out", to: "ts.In" }
-#    { from: "w1.Out", to: "ts.In" }
-#    { from: "ts.Out", to: "f1.In" }
-#    { from: "f1.Out:lg", to: "lg.In" }
-#    { from: "f1.Out:db", to: "db.In" }
-#  ]
-#  feeds: [
-#    { data: "[RF12demo.10] _ i31* g5 @ 868 MHz", to: "rf.In" }
-#    { data: "./gadgets/rfdata/20121130.txt.gz", to: "lr.Name" }
-#    { data: "./logger", to: "lg.Dir" }
-#  ]
-  
-# the node mapping for nodes at JeeLabs, as pre-configured circuit
-#circuits.nodesJeeLabs =
-#  gadgets: [
-#    { name: "nm", type: "NodeMap" }
-#  ]
-#  feeds: [
-#    { data: "RFg5i2,roomNode,boekenkast JC",  to: "nm.Info" }
-#    { data: "RFg5i3,radioBlip,werkkamer",     to: "nm.Info" }
-#    { data: "RFg5i4,roomNode,washok",         to: "nm.Info" }
-#    { data: "RFg5i5,roomNode,woonkamer",      to: "nm.Info" }
-#    { data: "RFg5i6,roomNode,hal vloer",      to: "nm.Info" }
-#    { data: "RFg5i9,homePower,meterkast",     to: "nm.Info" }
-#    { data: "RFg5i10,roomNode,hal voor",      to: "nm.Info" }
-#    { data: "RFg5i11,roomNode,logeerkamer",   to: "nm.Info" }
-#    { data: "RFg5i12,roomNode,boekenkast L",  to: "nm.Info" }
-#    { data: "RFg5i13,roomNode,raam halfhoog", to: "nm.Info" }
-#    { data: "RFg5i14,otRelay,zolderkamer",    to: "nm.Info" }
-#    { data: "RFg5i15,smaRelay,washok",        to: "nm.Info" }
-#    { data: "RFg5i18,p1scanner,meterkast",    to: "nm.Info" }
-#    { data: "RFg5i19,ookRelay,werkkamer",     to: "nm.Info" }
-#    { data: "RFg5i23,roomNode,gang boven",    to: "nm.Info" }
-#    { data: "RFg5i24,roomNode,zolderkamer",   to: "nm.Info" }
-#  ]
-#  labels: [
-#    { external: "In", internal: "nm.In" }
-#    { external: "Out", internal: "nm.Out" }
-#  ]
-
-# pipeline used for decoding RF12demo data and storing it in the database
-#circuits.rf12toDatabase =
-#  gadgets: [
-#    { name: "st", type: "SketchType" }
-#    { name: "d1", type: "Dispatcher" }
-#    { name: "nm", type: "nodesJeeLabs" }
-#    { name: "d2", type: "Dispatcher" }
-#    { name: "rd", type: "Readings" }
-#    { name: "ss", type: "PutReadings" }
-#    { name: "f2", type: "FanOut" }
-#    { name: "sr", type: "SplitReadings" }
-#    { name: "db", type: "LevelDB" }
-#  ]
-#  wires: [
-#    { from: "st.Out", to: "d1.In" }
-#    { from: "d1.Out", to: "nm.In" }
-#    { from: "nm.Out", to: "d2.In" }
-#    { from: "d2.Out", to: "rd.In" }
-#    { from: "rd.Out", to: "ss.In" }
-#    { from: "ss.Out", to: "f2.In" }
-#    { from: "f2.Out:sr", to: "sr.In" }
-#    { from: "f2.Out:db", to: "db.In" }
-#    { from: "sr.Out", to: "db.In" }
-#  ]
-#  feeds: [
-#    { data: "Sketch-", to: "d1.Prefix" }
-#    { data: "Node-", to: "d2.Prefix" }
-#  ]
-#  labels: [
-#    { external: "In", internal: "st.In" }
-#  ]
-
-# serial port test
-circuits.serial =
-  gadgets: [
-    { name: "sp", type: "SerialPort" }
-    { name: "ts", type: "TimeStamp" }
-    { name: "f1", type: "FanOut" }
-    { name: "lg", type: "Logger" }
-    { name: "db", type: "rf12toDatabase" }
-  ]
-  wires: [
-    { from: "sp.From", to: "ts.In" }
-    { from: "ts.Out", to: "f1.In" }
-    { from: "f1.Out:lg", to: "lg.In" }
-    { from: "f1.Out:db", to: "db.In" }
-  ]
-  feeds: [
-    { data: "/dev/tty.usbserial-A901ROSN", to: "sp.Port" }
-    { data: "./logger", to: "lg.Dir" }
   ]
 
 # jeeboot server test
@@ -384,15 +266,6 @@ circuits.tableFill =
     { to: "db.In", tag: "/column/reading/val", data: { name: "Values" } }
     { to: "db.In", tag: "/column/reading/ms", data: { name: "Timestamp" } }
     { to: "db.In", tag: "/column/reading/typ", data: { name: "Type" } }
-  ]
-
-# trial circuit
-circuits.try1 =
-  gadgets: [
-    { name: "db", type: "LevelDB" }
-  ]
-  feeds: [
-    { tag: "<range>", data: "/reading/", to: "db.In" }
   ]
 
 # write configuration to file, but keep a backup of the original, just in case

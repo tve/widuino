@@ -2,6 +2,8 @@ ng = angular.module 'myApp', [
   'ui.router'
   'ngAnimate'
   'mm.foundation'
+  'angular-underscore'
+  'angular-flot'
 ]
 
 ng.value 'appInfo',

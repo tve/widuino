@@ -1,1 +1,1 @@
-require('../../jcw/jeebus/base/devmode');
+require('./jeebus_base/devmode');

@@ -1,0 +1,53 @@
+
+<div class="row">
+  <div class="large-10 columns">
+    <h3>Readings</h3>
+  </div>
+  <div class="large-2 columns">
+    <h3>
+      <!-- for vertical alignment-->
+    </h3>
+    <input type="text" ng-model="shared.plotQuery" placeholder="Search..."/>
+  </div>
+  <div class="large-12 columns">
+    <flot dataset="flotData" options="flotOptions" width="100%" height="400px"></flot>
+    <table>
+      <tr>
+        <th>Label</th>
+        <th>DB key</th>
+        <th>Start</th>
+        <th>End</th>
+        <th>Values</th>
+      </tr>
+      <tr ng-repeat="s in series | orderBy:&quot;id&quot;">
+        <td>{{s.label}}</td>
+        <td>{{s.dbkey}}</td>
+        <td>{{s.start}}</td>
+        <td>{{s.end}}</td>
+        <td>{{s.values.length}}</td>
+      </tr>
+    </table>
+  </div>
+  <div class="large-12 columns">
+    <table>
+      <tr>
+        <th>Location</th>
+        <th>Parameter</th>
+        <th>Value</th>
+        <th>Unit</th>
+        <th>Time</th>
+        <th>Type</th>
+        <th>Id</th>
+      </tr>
+      <tr ng-repeat="r in readings | filter:shared.plotQuery | orderBy:&quot;loc&quot; track by r.id" highlight-on-change="r.ms">
+        <td align="right">{{r.loc}}</td>
+        <td>{{r.param}}</td>
+        <td align="right">{{r.value}}</td>
+        <td>{{r.unit}}</td>
+        <td>{{r.ms | date:"yyyy-MM-dd HH:mm:ss"}}</td>
+        <td>{{r.typ}}</td>
+        <td>{{r.id}}</td>
+      </tr>
+    </table>
+  </div>
+</div>

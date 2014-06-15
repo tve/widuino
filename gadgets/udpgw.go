@@ -45,7 +45,6 @@ type UDPGateway struct {
 func (w *UDPGateway) Run() {
         if port, ok := <-w.Port; ok {
                 p := int(port.(float64))
-                fmt.Printf("UDP-Gateway listening on port %d\n", p)
                 w.Listen(p)
                 go w.Transmitter()
                 w.Receiver()
@@ -122,13 +121,6 @@ func (w *UDPGateway) Receiver() {
                         newGroup := saveGroupToAddr(groupId, pktSrc)
                         if newGroup {
                                 w.group = groupId
-                                /*
-                                hack := map[string]int{
-                                        "<RF12demo>": 12, "band": 915,
-                                        "group": int(groupId), "id": 31,
-                                }
-                                w.Recv.Send(hack)
-                                */
                         }
 
                         switch flags {
@@ -138,8 +130,8 @@ func (w *UDPGateway) Receiver() {
                         case 5, 8:
                                 info := map[string]int{"<node>": int(nodeId)}
                                 glog.V(1).Infoln("*****")
-                                glog.V(1).Infof("Boot: %+v", info)
-                                glog.V(2).Infof("Got boot packet len=%d src=%v", pktLen, pktSrc)
+                                glog.Infof("UDP Recv boot: src=%v len=%d", pktSrc, pktLen)
+                                glog.V(2).Infof("Boot: %+v", info)
                                 glog.V(4).Infof("  Pkt=%#v", data[0:min(len(data),10)])
                                 w.Oob.Send(info)
                                 dd := data[2:]
@@ -163,10 +155,14 @@ func (w *UDPGateway) Receiver() {
                                         "raw"  : data[2:],
                                         "asof" : time.Now(),
                                 }
-                                glog.V(1).Infoln("*****")
-                                glog.V(1).Infof("Recv: %+v", pkt)
-                                glog.V(2).Infof("Got packet len=%d src=%v node=%d",
-					pktLen, pktSrc, nodeId&0x1f)
+                                glog.V(2).Infoln("*****")
+                                var b0 byte // first data byte, typ. used as message type dispatch
+                                if len(data) > 3 {
+                                        b0 = data[3]
+                                }
+                                glog.Infof("UDP Recv: src=%v node=%d b0=%d len=%d",
+					pktSrc, nodeId&0x1f, b0, pktLen)
+                                glog.V(2).Infof("Recv: %+v", pkt)
                                 glog.V(4).Infof("  Pkt=%#v", data[0:min(len(data),10)])
 				// If an ACK is requested we should send that asap
 				if flags & 1 != 0 {
@@ -174,22 +170,6 @@ func (w *UDPGateway) Receiver() {
 				}
                                 // Now process what we got
                                 w.Recv.Send(pkt)
-/*
-                        // standard data packet, prodce multiple messages like rf12demo does
-                        default:
-                                glog.V(2).Infof("Got packet len=%d src=%v node=%d",
-					pktLen, pktSrc, nodeId&0x1f)
-                                glog.V(4).Infof("  Pkt=%#v", data[0:min(len(data),10)])
-				// If an ACK is requested we should send that asap
-				if flags & 1 != 0 {
-					w.sendPacket(groupId, nodeId, 0x6, []byte{})
-				}
-				// Now process the packet
-                                dd := data[2:]
-                                dd[0] = (flags << 5) | (nodeId & 0x1f)
-                                w.Recv.Send(info)
-                                w.Recv.Send(dd)
- */
                         }
                 }
         }
