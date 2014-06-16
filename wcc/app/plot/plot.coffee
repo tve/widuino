@@ -11,13 +11,12 @@ plotCtrl = ($scope, jeebus) ->
   drivers = {}
 
   # handle incoming data for a plot
-  handlePlotData = (row, key, value) ->
+  handlePlotData = (row, point) ->
     #console.log "PlotHandler:", arguments
     s = $scope.series[row]
     if s?
       s.values ?= []
-      time = parseFloat(key)
-      s.values.push([time, value])
+      s.values.push([point.Asof, point.Avg])
     #console.log "So far:", $scope.series[row]
 
   # request data for a plot
@@ -37,7 +36,7 @@ plotCtrl = ($scope, jeebus) ->
       sensor = "sensor/#{$scope.series[0].dbkey}"
       console.log "Fetching plot data for", sensor
       now = (new Date()).getTime()
-      jeebus.timeRange sensor, now-3600*1000, now, 150, angular.bind(this, handlePlotData, 0)
+      jeebus.timeRange sensor, now-3600*1000, now, 20*1000, angular.bind(this, handlePlotData, 0)
         .on 'sync', ->
           updatePlot(0)
 

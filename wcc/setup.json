@@ -1,51 +1,6 @@
 {
-    "main": {
-        "gadgets": [
-            {
-                "name": "http",
-                "type": "HTTPServer"
-            },
-            {
-                "name": "init",
-                "type": "init"
-            }
-        ],
-        "feeds": [
-            {
-                "tag": "/",
-                "data": "./app",
-                "to": "http.Handlers"
-            },
-            {
-                "tag": "/base/",
-                "data": "./base",
-                "to": "http.Handlers"
-            },
-            {
-                "tag": "/ws",
-                "data": "<websocket>",
-                "to": "http.Handlers"
-            },
-            {
-                "data": ":3000",
-                "to": "http.Port"
-            }
-        ]
-    },
     "init": {
         "gadgets": [
-            {
-                "name": "mqtt",
-                "type": "MQTTServer"
-            },
-            {
-                "name": "sub",
-                "type": "DataSub"
-            },
-            {
-                "name": "pub",
-                "type": "MQTTPub"
-            },
             {
                 "name": "dummy",
                 "type": "Pipe"
@@ -77,14 +32,6 @@
         ],
         "wires": [
             {
-                "from": "mqtt.PortOut",
-                "to": "pub.Port"
-            },
-            {
-                "from": "sub.Out",
-                "to": "pub.In"
-            },
-            {
                 "from": "sub2.Out",
                 "to": "aggr.In"
             },
@@ -94,14 +41,6 @@
             }
         ],
         "feeds": [
-            {
-                "data": ":1883",
-                "to": "mqtt.Port"
-            },
-            {
-                "data": "/",
-                "to": "sub.In"
-            },
             {
                 "data": "sensor/",
                 "to": "sub2.In"
@@ -230,31 +169,38 @@
         "wires": [
             {
                 "from": "cf.Out",
-                "to": "jb.Cfg"
+                "to": "jb.Cfg",
+                "capacity": 10
             },
             {
                 "from": "jb.Files",
-                "to": "wf.In"
+                "to": "wf.In",
+                "capacity": 10
             },
             {
                 "from": "wf.Out",
-                "to": "rd.In"
+                "to": "rd.In",
+                "capacity": 10
             },
             {
                 "from": "rd.Out",
-                "to": "hx.In"
+                "to": "hx.In",
+                "capacity": 100
             },
             {
                 "from": "hx.Out",
-                "to": "bf.In"
+                "to": "bf.In",
+                "capacity": 100
             },
             {
                 "from": "bf.Out",
-                "to": "cs.In"
+                "to": "cs.In",
+                "capacity": 100
             },
             {
                 "from": "cs.Out",
-                "to": "bd.In"
+                "to": "bd.In",
+                "capacity": 100
             }
         ],
         "labels": [
@@ -282,7 +228,7 @@
         "gadgets": [
             {
                 "name": "nm",
-                "type": "NodeMap"
+                "type": "NodeMapM"
             },
             {
                 "name": "di",
@@ -359,12 +305,12 @@
                 "to": "mm.Info"
             },
             {
-                "data": "module_name",
-                "to": "di.Field"
-            },
-            {
                 "data": "Module-",
                 "to": "di.Prefix"
+            },
+            {
+                "data": "module_name",
+                "to": "di.Field"
             }
         ],
         "labels": [
@@ -394,7 +340,7 @@
             },
             {
                 "name": "ss",
-                "type": "PutReadings"
+                "type": "PutReadingsM"
             },
             {
                 "name": "f2",
@@ -402,7 +348,7 @@
             },
             {
                 "name": "sr",
-                "type": "SplitReadings"
+                "type": "SplitReadingsM"
             },
             {
                 "name": "db",
@@ -451,58 +397,6 @@
             {
                 "external": "In",
                 "internal": "ni.In"
-            }
-        ]
-    },
-    "serial": {
-        "gadgets": [
-            {
-                "name": "sp",
-                "type": "SerialPort"
-            },
-            {
-                "name": "ts",
-                "type": "TimeStamp"
-            },
-            {
-                "name": "f1",
-                "type": "FanOut"
-            },
-            {
-                "name": "lg",
-                "type": "Logger"
-            },
-            {
-                "name": "db",
-                "type": "rf12toDatabase"
-            }
-        ],
-        "wires": [
-            {
-                "from": "sp.From",
-                "to": "ts.In"
-            },
-            {
-                "from": "ts.Out",
-                "to": "f1.In"
-            },
-            {
-                "from": "f1.Out:lg",
-                "to": "lg.In"
-            },
-            {
-                "from": "f1.Out:db",
-                "to": "db.In"
-            }
-        ],
-        "feeds": [
-            {
-                "data": "/dev/tty.usbserial-A901ROSN",
-                "to": "sp.Port"
-            },
-            {
-                "data": "./logger",
-                "to": "lg.Dir"
             }
         ]
     },
@@ -672,21 +566,6 @@
                 "data": {
                     "name": "Type"
                 }
-            }
-        ]
-    },
-    "try1": {
-        "gadgets": [
-            {
-                "name": "db",
-                "type": "LevelDB"
-            }
-        ],
-        "feeds": [
-            {
-                "tag": "<range>",
-                "data": "/reading/",
-                "to": "db.In"
             }
         ]
     }

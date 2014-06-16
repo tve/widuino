@@ -10,15 +10,18 @@ package widuino
 
 import (
 	"fmt"
+	"github.com/tve/widuino/interpol8"
+	"math"
 	"strconv"
 	"strings"
-	//"time"
 
 	"github.com/golang/glog"
 	"github.com/jcw/flow"
 	"github.com/jcw/jeebus/gadgets/database"
 	//"github.com/jcw/jeebus/gadgets"
 )
+
+const fillFct = 4 // intervals to interpolate over
 
 func init() {
 	flow.Registry["TimeRange"] = func() flow.Circuitry { return &TimeRange{} }
@@ -64,43 +67,33 @@ func (g *TimeRange) Run() {
 
 	// parse the params
 	key := params.String("key")
-	startT := params.Int64("start")
-	endT := params.Int64("end")
-	count := params.Int64("count")
-	glog.Infof("TimeRange for %s from %d to %d count %d", key, startT, endT, count)
+	startT := params.Uint64("start")
+	endT := params.Uint64("end")
+	step := params.Uint64("step")
+	glog.Infof("TimeRange for %s from %d to %d by %d", key, startT, endT, step)
 
 	// input validation
 	switch {
 	case endT <= startT:
 		glog.Error("TimeRange: error end<=start")
 		return
-	case count < 3:
-		glog.Error("TimeRange: count must be > 2")
-		return
-	case (endT - startT) < count:
-		glog.Error("TimeRange: 1 millisecond step minimum")
+	case step < 2:
+		glog.Error("TimeRange: step must be > 1")
 		return
 	}
-	step := (endT - startT) / count // round-down...
-	// ensure we get enough data to interpolate
-	startT -= step
-	endT += step
+	count := (endT - startT) / step // round-down...
 
-	// Retrieve the data
-	type timeData struct {
-		t int64
-		v float64
-	}
-	data := make([]timeData, 0)
-	database.DbIterateOverKeys(fmt.Sprintf("%s/%d", key, startT),
-		fmt.Sprintf("%s/%d", key, endT),
+	// Retrieve the data TODO: need to grab maxFill*step extra data
+	raw := make([]interpol8.RawPoint, 0, count)
+	database.DbIterateOverKeys(fmt.Sprintf("%s/%d", key, startT-step),
+		fmt.Sprintf("%s/%d", key, endT+step),
 		func(k string, v []byte) {
 			if !strings.HasPrefix(k, key+"/") {
 				glog.Warning("TimeRange: huh? k=", k)
 				return
 			}
 			t := strings.TrimPrefix(k, key+"/")
-			time, err := strconv.ParseInt(t, 10, 64)
+			time, err := strconv.ParseUint(t, 10, 64)
 			if err != nil || time < startT || time > endT {
 				glog.Warning("TimeRange: huh? t=", t)
 				return
@@ -110,14 +103,38 @@ func (g *TimeRange) Run() {
 				glog.Warning("TimeRange: huh? v=", v)
 				return
 			}
-			data = append(data, timeData{time, val})
+			raw = append(raw, interpol8.RawPoint{time, val})
 		})
 
 	// TODO: Interpolate
+	data, err := interpol8.Raw(raw, interpol8.Absolute, startT, endT, step, fillFct*step)
+	if err != nil {
+		glog.Error("TimeRange: ", err)
+		return
+	}
+
+	// Convert NaN to null so we can output to JSON. Huh? Yup, it's a great hack!
+	type PointOrNaN struct {
+		Asof          uint64
+		Avg, Min, Max interface{} // either float64 or nil
+	}
+	dataHack := make([]PointOrNaN, len(data))
+	for i := range data {
+		dataHack[i].Asof = data[i].Asof
+		if math.IsNaN(data[i].Avg) { // if Avg is NaN then Min&Max also
+			dataHack[i].Avg = nil
+			dataHack[i].Min = nil
+			dataHack[i].Max = nil
+		} else {
+			dataHack[i].Avg = data[i].Avg
+			dataHack[i].Min = data[i].Min
+			dataHack[i].Max = data[i].Max
+		}
+	}
 
 	// Output what we've got
 	g.Out.Send(flow.Tag{"<range>", key})
-	for _, d := range data {
+	for _, d := range dataHack {
 		g.Out.Send(d)
 	}
 	g.Out.Send(flow.Tag{"<sync>", ""})
