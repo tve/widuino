@@ -1,0 +1,10 @@
+=============== Jun 15, 2014 (PDT) ===============
+23:57:57.724225 db@open opening
+23:57:57.724350 journal@recovery F·1
+23:57:57.725179 journal@recovery recovering @363
+23:57:57.831963 mem@flush created L0@365 N·67 S·1KiB "/..d,v16936":"s..7,v16973"
+23:57:57.835277 db@janitor F·7 G·0
+23:57:57.835311 db@open done T·111.041242ms
+23:57:57.836909 table@compaction L0·4 -> L1·1 S·71KiB Q·16998
+23:57:58.024074 table@build created L1@368 N·6099 S·67KiB "/..d,v16936":"s..7,v16973"
+23:57:58.107683 table@compaction commited F-4 S-4KiB D·185 T·270.75336ms

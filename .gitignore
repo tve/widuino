@@ -15,7 +15,13 @@
 # Arduino
 *.dep
 .dep
+.lib
 
 # VIM
 .*.sw?
-udpgw
+
+# GO
+*.coverprofile
+
+# Other
+*.log

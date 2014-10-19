@@ -1,0 +1,12 @@
+{
+	"00000000000000000000000000000000": "55", # ERROR
+	"000102030405060708090a0b0c0d0e0f": [ 101, 252, 3 ]
+}
+
+# Map nodeType to hex file
+{
+	"100": "hex/default.hex",
+	"101": "hex/tempNode.hex",
+}
+
+

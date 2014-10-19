@@ -1,0 +1,12 @@
+# Map HwId (16 hex digits) to [ nodeType, GroupId, NodeId ]
+{
+	"00000000000000000000000000000000": [ 100, 252, 2 ], # Default entry
+	"01020304000000000000000000000000": [ 101, 252, 3 ]
+}
+
+# Map nodeType to hex file
+{
+	"100": "default.hex"
+}
+
+

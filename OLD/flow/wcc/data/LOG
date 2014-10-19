@@ -1,0 +1,7 @@
+=============== Jun 15, 2014 (PDT) ===============
+23:58:27.824115 db@open opening
+23:58:27.824235 journal@recovery F·1
+23:58:27.825070 journal@recovery recovering @366
+23:58:27.941458 mem@flush created L0@369 N·49 S·1KiB "/..d,v17004":"s..0,v17023"
+23:58:27.944882 db@janitor F·4 G·0
+23:58:27.944913 db@open done T·120.752894ms
