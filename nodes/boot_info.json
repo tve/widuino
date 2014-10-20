@@ -2,7 +2,7 @@
 
 {     # Hardware ID                          NodeType GroupId NodeId
 	"00000000000000000000000000000000": [    100,    212,     13 ], # Virgin node
-	"94df42dc3e9a08390000000000000000": [   100,    212,     12 ]  # Test node
+	"94df42dc3e9a08390000000000000000": [    100,    212,     12 ]  # Test node
 }
 
 # Map nodeType to hex file

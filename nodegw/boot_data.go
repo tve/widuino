@@ -48,7 +48,7 @@ func NewBooter(configFile string) *booter {
 		glog.Warningf("Cannot watch config files: %s", err.Error())
 	}
 	b.watchHandler(b.watcher)
-	b.watcher.Add(configFile)
+	//b.watcher.Add(configFile)
 	b.watcher.Events <- fsnotify.Event{configFile, fsnotify.Create}
 
 	return &b
@@ -61,7 +61,7 @@ func (b *booter) watchHandler(watcher *fsnotify.Watcher) {
 	go func() {
 		for event := range watcher.Events {
 			glog.Info("config watcher event: ", event)
-			if event.Op&(fsnotify.Create|fsnotify.Write|fsnotify.Rename) == 0 {
+			if event.Op&(fsnotify.Create|fsnotify.Write) == 0 {
 				continue
 			}
 			if event.Name == b.configFile {
@@ -101,6 +101,8 @@ func (b *booter) watchHandler(watcher *fsnotify.Watcher) {
 // read the boot config file
 func (b *booter) readBootConfig() error {
 	b.dir = path.Dir(b.configFile)
+	glog.V(2).Infof("  watching %s", b.dir)
+	b.watcher.Add(b.dir)
 
 	config, err := ioutil.ReadFile(b.configFile)
 	if err != nil {
@@ -165,7 +167,8 @@ func (b *booter) findSoftware(id uint16) (software, error) {
 
 // read software
 func (b *booter) readHexFile(file string) error {
-	b.watcher.Add(file)
+	glog.V(2).Infof("  watching %s", path.Dir(file))
+	b.watcher.Add(path.Dir(file))
 	// load it
 	glog.V(2).Infof("  reading %s", file)
 	f, err := os.Open(file)

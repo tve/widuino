@@ -79,7 +79,7 @@ void loop() {
     memcpy(pkt+1, data, d-data);
     net.send(1+d-data, true);
 
-    if (++times == 2) {
+    if (++times == 5) {
       delay(100); net.poll();
       delay(200); net.poll();
       jb_upgrade(1);
