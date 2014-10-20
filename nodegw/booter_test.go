@@ -4,11 +4,17 @@ package main
 // Omega: Alt+937
 
 import (
+	"bytes"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"path"
+	"strings"
+	"time"
+
 	"github.com/golang/glog"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"strings"
 )
 
 //===== tests =====
@@ -21,6 +27,7 @@ var _ = Describe("Booter", func() {
 
 		BeforeEach(func() {
 			boo = NewBooter("test_config1.json")
+			time.Sleep(10 * time.Millisecond)
 		})
 
 		It("returns a Booter", func() {
@@ -38,18 +45,13 @@ var _ = Describe("Booter", func() {
 
 		It("returns sketch mappings", func() {
 			b := boo.(*booter)
-			Ω(b.sketch).Should(HaveLen(3))
+			Eventually(
+				func() map[uint16]string { return b.sketch }).
+				Should(HaveLen(3))
 			Ω(b.sketch[100]).Should(Equal("hex/default.hex"))
 			Ω(b.sketch[101]).Should(Equal("hex/tempNode.hex"))
 		})
 
-	})
-
-	Describe("parses bad config file", func() {
-		It("returns nil", func() {
-			boo := NewBooter("test_config2.json")
-			Ω(boo).Should(BeNil())
-		})
 	})
 
 	It("calculates CRC-16", func() {
@@ -81,6 +83,7 @@ var _ = Describe("Booter", func() {
 
 		BeforeEach(func() {
 			boo = NewBooter("test_config1.json")
+			time.Sleep(10 * time.Millisecond)
 			req = PairingRequest{101, 13, 14, 0, [16]uint8{}}
 		})
 		It("handles a null hwId", func() {
@@ -132,6 +135,7 @@ var _ = Describe("Booter", func() {
 		BeforeEach(func() {
 			boo = NewBooter("test_config1.json")
 			boo2 = NewBooter("hex/test_config3.json")
+			time.Sleep(10 * time.Millisecond)
 		})
 		It("finds existing software", func() {
 			sw, err := boo.findSoftware(100)
@@ -170,6 +174,7 @@ var _ = Describe("Booter", func() {
 
 		BeforeEach(func() {
 			boo = NewBooter("test_config1.json")
+			time.Sleep(10 * time.Millisecond)
 			req = UpgradeRequest{100, 55, 1024, 0}
 		})
 		It("handles an existing software", func() {
@@ -193,6 +198,7 @@ var _ = Describe("Booter", func() {
 
 		BeforeEach(func() {
 			boo = NewBooter("test_config1.json")
+			time.Sleep(10 * time.Millisecond)
 			req = DownloadRequest{100, 0}
 		})
 		It("handles the first chunk of an existing software", func() {
@@ -224,6 +230,81 @@ var _ = Describe("Booter", func() {
 			req.SwId = 105
 			rep := boo.Download(req)
 			Ω(rep).Should(BeNil())
+		})
+
+	})
+
+	Describe("filesystem notifications", func() {
+
+		var boo Booter
+		var defaultPath, shortPath, configPath string
+		var defaultName, shortName string
+		var shortHex, config []byte
+
+		BeforeEach(func() {
+			rand := uint32(time.Now().UnixNano() + int64(os.Getpid()))
+			// make a copy of the default sketch hex
+			defaultHex, _ := ioutil.ReadFile("hex/default.hex")
+			defaultName = fmt.Sprintf("default-%x.hex", rand)
+			defaultPath = path.Join(os.TempDir(), defaultName)
+			ioutil.WriteFile(defaultPath, defaultHex, 0600)
+			// make a copy of the short sketch hex
+			shortHex, _ = ioutil.ReadFile("hex/short.hex")
+			shortName = fmt.Sprintf("short-%x.hex", rand)
+			shortPath = path.Join(os.TempDir(), shortName)
+			ioutil.WriteFile(shortPath, shortHex, 0600)
+			// load test_config1.json
+			config, _ = ioutil.ReadFile("test_config1.json")
+			configName := fmt.Sprintf("config-%x.hex", rand)
+			configPath = path.Join(os.TempDir(), configName)
+			// replace the default sketch hex
+			config = bytes.Replace(config, []byte("hex/default.hex"),
+				[]byte(defaultName), -1)
+			ioutil.WriteFile(configPath, config, 0600)
+			// create booter
+			boo = NewBooter(configPath)
+			time.Sleep(10 * time.Millisecond)
+		})
+
+		AfterEach(func() {
+			os.Remove(defaultPath)
+			os.Remove(shortPath)
+			os.Remove(configPath)
+		})
+
+		It("reloads when the config changes", func() {
+			b := boo.(*booter)
+
+			hasShortSketch := func() bool {
+				for _, s := range b.sketch {
+					if s == shortPath {
+						return true
+					}
+				}
+				return false
+			}
+
+			Ω(hasShortSketch()).Should(Equal(false))
+
+			config = bytes.Replace(config, []byte(defaultName), []byte(shortPath), -1)
+			ioutil.WriteFile(configPath, config, 0600)
+			Eventually(hasShortSketch).Should(Equal(true))
+		})
+
+		It("reloads when a sketch changes", func() {
+			b := boo.(*booter)
+
+			Eventually(func() int {
+				sw, _ := b.findSoftware(100)
+				return len(sw)
+			}).Should(Equal(5024))
+
+			glog.Infof("===== writing %s =====", defaultPath)
+			ioutil.WriteFile(defaultPath, shortHex, 0600)
+			Eventually(func() int {
+				sw, _ := b.findSoftware(100)
+				return len(sw)
+			}).Should(Equal(240))
 		})
 
 	})

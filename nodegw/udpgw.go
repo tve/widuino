@@ -76,8 +76,8 @@ func (u *UDPGateway) sendPacket(group, node, flags byte, data []byte) {
 	buf[2] = node  // node id
 	copy(buf[3:], data)
 	// logging and sending
-	glog.V(1).Infof("Send: %+v", buf)
-	glog.V(2).Infof("Snd packet len=%d dst=%v node=%d", len(buf), addr, node)
+	glog.Infof("Snd packet len=%d dst=%v node=%d", len(buf), addr, node)
+	glog.V(2).Infof("  Send: %+v", buf)
 	glog.V(4).Infof("  Pkt=%#v", buf)
 	u.sock.WriteToUDP(buf, addr)
 }

@@ -17,34 +17,95 @@ import (
 	"strconv"
 	"strings"
 
-	//"gopkg.in/fsnotify.v1"
 	"github.com/golang/glog"
+	"gopkg.in/fsnotify.v1"
 )
 
 type software []byte
 
 type booter struct {
-	dir      string                 // directory with config and hex files
-	nodeType map[string]pairingInfo // map HwId -> nodeType, groupId, nodeId
-	sketch   map[uint16]string      // map NodeType -> .hex file
-	software map[uint16]software    // map NodeType -> sketch hex data
+	configFile string                 // path to config file
+	dir        string                 // directory with config and hex files
+	watcher    *fsnotify.Watcher      // watcher for all the files
+	nodeType   map[string]pairingInfo // map HwId -> nodeType, groupId, nodeId
+	sketch     map[uint16]string      // map NodeType -> .hex file
+	software   map[string]software    // map .hex file -> sketch hex data
 }
 
 var commentRe = regexp.MustCompile(`(?m)#.*$`)
 
 func NewBooter(configFile string) *booter {
 	b := booter{
-		nodeType: make(map[string]pairingInfo),
-		sketch:   make(map[uint16]string),
-		software: make(map[uint16]software),
+		configFile: configFile,
+		nodeType:   make(map[string]pairingInfo),
+		sketch:     make(map[uint16]string),
+		software:   make(map[string]software),
 	}
 
-	config, err := ioutil.ReadFile(configFile)
+	var err error
+	b.watcher, err = fsnotify.NewWatcher()
 	if err != nil {
-		glog.Errorf("Error reading config file %s: %s", configFile, err.Error())
-		return nil
+		glog.Warningf("Cannot watch config files: %s", err.Error())
 	}
-	b.dir = path.Dir(configFile)
+	b.watchHandler(b.watcher)
+	b.watcher.Add(configFile)
+	b.watcher.Events <- fsnotify.Event{configFile, fsnotify.Create}
+
+	return &b
+}
+
+// ===== Filesystem change notifications
+
+// eventHandler waits for filesystem event notifications and causes the config to be reloaded
+func (b *booter) watchHandler(watcher *fsnotify.Watcher) {
+	go func() {
+		for event := range watcher.Events {
+			glog.Info("config watcher event: ", event)
+			if event.Op&(fsnotify.Create|fsnotify.Write|fsnotify.Rename) == 0 {
+				continue
+			}
+			if event.Name == b.configFile {
+				// reload the config, start by disposing of existing info
+				b.nodeType = make(map[string]pairingInfo)
+				b.sketch = make(map[uint16]string)
+				for k, _ := range b.software {
+					if k != b.configFile {
+						b.watcher.Remove(k)
+					}
+				}
+				b.software = make(map[string]software)
+				// now load fresh
+				err := b.readBootConfig()
+				if err != nil {
+					glog.Errorf("Config error in %s: %s",
+						b.configFile, err.Error())
+				}
+			} else {
+				if _, ok := b.software[event.Name]; ok {
+					b.readHexFile(event.Name)
+				} else {
+					b.watcher.Remove(event.Name)
+				}
+			}
+		}
+	}()
+	go func() {
+		for err := range watcher.Errors {
+			glog.Warningf("boot info watch error:", err.Error())
+		}
+	}()
+}
+
+// ===== Read boot configuration
+
+// read the boot config file
+func (b *booter) readBootConfig() error {
+	b.dir = path.Dir(b.configFile)
+
+	config, err := ioutil.ReadFile(b.configFile)
+	if err != nil {
+		return err
+	}
 
 	// remove comments
 	config = commentRe.ReplaceAllLiteral(config, []byte{})
@@ -54,8 +115,7 @@ func NewBooter(configFile string) *booter {
 
 	err = d.Decode(&b.nodeType)
 	if err != nil {
-		glog.Errorf("Error reading pairing from config: %s", err.Error())
-		return nil
+		return fmt.Errorf("error reading pairing: %s", err.Error())
 	}
 	for i, v := range b.nodeType {
 		glog.Infof("  node %s -> nodeType=%d RF%di%d", i, v[0], v[1], v[2])
@@ -64,8 +124,7 @@ func NewBooter(configFile string) *booter {
 	var sketches map[string]string
 	err = d.Decode(&sketches)
 	if err != nil {
-		glog.Errorf("Error reading sketches from config: %s", err.Error())
-		return nil
+		return fmt.Errorf("error reading sketches: %s", err.Error())
 	}
 	b.sketch = make(map[uint16]string)
 	for k, v := range sketches {
@@ -76,44 +135,51 @@ func NewBooter(configFile string) *booter {
 	for i, v := range b.sketch {
 		glog.Infof("  nodeType=%d -> %s", i, v)
 	}
-
-	return &b
+	return nil
 }
-
-// ===== Filesystem change notifications
-
-// ===== Read boot configuration
 
 // ===== Read Intel hex files
 
 func (b *booter) findSoftware(id uint16) (software, error) {
-	sw, ok := b.software[id]
-	glog.V(2).Infof("findSoftware for nodeType=%d", id)
-	if ok {
-		glog.V(2).Infof("  retrieving cached software for nodeType=%d", id)
-		return sw, nil
-	}
-
-	// load it
 	file, ok := b.sketch[id]
 	if !ok {
 		return []byte{}, fmt.Errorf("no sketch is configured")
 	}
-	fName := path.Join(b.dir, file)
-	glog.V(2).Infof("  reading %s", fName)
-	f, err := os.Open(fName)
+	if file[0] != '/' {
+		file = path.Join(b.dir, file)
+	}
+
+	sw, ok := b.software[file]
+	glog.V(2).Infof("findSoftware for nodeType=%d -> %s", id, file)
+	if !ok {
+		err := b.readHexFile(file)
+		if err != nil {
+			return []byte{}, err
+		}
+		sw = b.software[file]
+	} else {
+		glog.V(2).Infof("  retrieving cached software for nodeType=%d", id)
+	}
+	return sw, nil
+}
+
+// read software
+func (b *booter) readHexFile(file string) error {
+	b.watcher.Add(file)
+	// load it
+	glog.V(2).Infof("  reading %s", file)
+	f, err := os.Open(file)
 	if err != nil {
-		return []byte{}, fmt.Errorf("opening %s: %s", fName, err.Error())
+		return fmt.Errorf("opening %s: %s", file, err.Error())
 	}
-	sw, err = readHex(f)
+	sw, err := readHex(f)
 	// add to cache
-	if err == nil {
-		glog.V(2).Infof("  saving software for nodeType=%d in cache (%d bytes)",
-			id, len(sw))
-		b.software[id] = sw
+	if err != nil {
+		return err
 	}
-	// return the info
-	return sw, err
+	glog.V(2).Infof("  saving software %s in cache (%d bytes)", file, len(sw))
+	b.software[file] = sw
+	return nil
 }
 
 func readHex(rd io.Reader) ([]byte, error) {

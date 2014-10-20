@@ -5,6 +5,9 @@ build: $(NAME)
 $(NAME): *.go
 	go build -o $(NAME)
 
+verbosetest: $(NAME)
+	ginkgo -noColor -- -logtostderr=true
+
 test: $(NAME)
 	ginkgo -noColor
 	ginkgo -noColor -cover

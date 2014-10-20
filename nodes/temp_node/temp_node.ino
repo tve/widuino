@@ -19,7 +19,7 @@ byte numTemp;
 Port led(1);
 
 // Standard module config and dispatch set-up
-Net net(29); // use node_id=29 by default, which is goign to raise red flags...
+Net net(29); // use node_id=29 by default, which is going to raise red flags...
 Log l, *logger=&l;
 static Configured *(node_config[]) = {
   &net, logger, &owScan, 0
@@ -59,13 +59,13 @@ void loop() {
     for (byte i=0; i<numTemp; i++) {
       float t = owTemp.get(i);
       *d++ = (int8_t)(t+0.5);
-    led.digiWrite(LOW);
-    led.digiWrite2(LOW);
+      led.digiWrite(LOW);
+      led.digiWrite2(LOW);
       logger->print("Temp ");
       logger->print(i);
       logger->print("=");
       logger->println(t);
-    led.digiWrite2(HIGH);
+      led.digiWrite2(HIGH);
     }
 
     // send a packet with the data
@@ -79,10 +79,10 @@ void loop() {
     memcpy(pkt+1, data, d-data);
     net.send(1+d-data, true);
 
-    if (++times == 10) {
+    if (++times == 2) {
       delay(100); net.poll();
       delay(200); net.poll();
-      jb_upgrade();
+      jb_upgrade(1);
     }
   }
 
