@@ -115,6 +115,10 @@ void eeconf_dispatch(volatile uint8_t *data, uint8_t len) {
   }
 }
 
+void eeconf_reset() {
+  eeprom_write_word((uint16_t *)0x20, 0xF00D);
+}
+
 void eeconf_write(uint8_t module, void *data) {
   // iterate through modules and sum sizes to get offset for writing
   uint8_t *eeprom_addr = (uint8_t *)EEPROM_ADDR;

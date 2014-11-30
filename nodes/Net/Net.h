@@ -80,7 +80,7 @@ public:
   // Flush any queued packets and wait for ACKs until they come in or time out.
   // @return 0 when there are no more packets queued and nothing has been received.
   // Returns the module ID (first byte of packet) if a packet came in.
-  uint8_t Net::flush(void);
+  uint8_t flush(void);
 
   void reXmit(void);
 

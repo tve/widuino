@@ -2,6 +2,6 @@
 
 #include <JeeLib.h>
 #include <JeeBoot.h>
-#include <Config.h>
+#include <EEConf.h>
 #include <Net.h>
-#include <Log.h>
+#include <Logger.h>

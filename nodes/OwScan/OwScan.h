@@ -14,7 +14,7 @@
 // one higher than the number of actual devices, this leaves an empty spot for adding a
 // replacement device before deleting the failed one (it also makes it easier to temporarily
 // add a device for troubleshooting purposes).
-// 
+//
 // Currently only a single OwScan object can be instantiated at a time because multiple ones
 // would use the same EEPROM locations (this could be fixed easily).
 
@@ -23,7 +23,7 @@
 
 #define ONEWIRE_CRC8_TABLE 1
 #include <OneWire.h>
-#include <Config.h>
+#include <EEConf.h>
 
 #define INT16_MIN ((int16_t)0x8000)
 
@@ -60,7 +60,7 @@ public:
   void printDebug(Print *printer);
 
   // ---- lower level methods ----
-  
+
   uint8_t getCount() { return devCount; }
   uint8_t getMax() { return devMax; }
   OneWire getOneWire() { return ds; }
@@ -75,7 +75,7 @@ public:
 private:
   OneWire ds;
 
-  uint8_t devMax;                 // max number of devices 
+  uint8_t devMax;                 // max number of devices
   uint8_t devCount;               // number of devices (for which we have addr)
   uint64_t *devAddr;              // device addresses
   bool staticAddr;                // whether the addresses are static from the constructor

@@ -1,8 +1,8 @@
 #include <JeeLib.h>
 #include <OwScan.h>
 #include <OneWire.h> // needed by makefile, ugh
-#include <Config.h>
-#include <Log.h>
+#include <EEConf.h>
+#include <Logger.h>
 
 #define DEBUG 0
 
@@ -139,7 +139,7 @@ uint8_t OwScan::scan(Print *printer) {
   uint32_t save[devMax];
   for (byte s=0; s<devMax; s++)
     save[s] = devAddr[s]; // loose top 32 bits
-  config_write(OWSCAN_MODULE, save);
+  eeconf_write(OWSCAN_MODULE, save);
 
   return n_found;
 }

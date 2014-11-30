@@ -6,22 +6,28 @@
 #define EECONF_H
 
 // Code module IDs
-#define DONOTUSE_MODULE 0
-#define NET_MODULE      1
-#define LOG_MODULE      2
-#define NETTIME_MODULE  3
-#define OWTEMP_MODULE   4
-#define OWRELAY_MODULE  5
-#define OWSCAN_MODULE   6
+#define DONOTUSE_MODULE     0
+#define NET_MODULE          1
+#define LOG_MODULE          2
+#define NETTIME_MODULE      3
+#define OWTEMP_MODULE       4
+#define OWRELAY_MODULE      5
+#define OWSCAN_MODULE       6
+#define WATERLEVEL_MODULE   7
+#define GW_RSSI_MODULE      8
+#define THERMOCOUPLE_MODULE 9
 
 // Interface to be implemented by modules
 class Configured {
 public:
-  uint8_t moduleId;				  // must be a unique module ID
-  uint8_t configSize;				  // size of the config in bytes
+  uint8_t moduleId;                               // must be a unique module ID
+  uint8_t configSize;                             // size of the config in bytes
   virtual void applyConfig(uint8_t *) = 0;        // callback to apply the config read from EEPROM
   virtual void receive(volatile uint8_t *pkt, uint8_t len) = 0;  // cb to process a received packet
 };
+
+// Reset the EEPROM completely
+extern void eeconf_reset();
 
 // Initialize all modules based on the configuration in EEPROM
 // This will read the EEPROM and call each of the modules' applyConfig callback

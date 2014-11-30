@@ -22,7 +22,7 @@
 #include <JeeLib.h>
 #include <JeeBoot.h>
 #include <alloca.h>
-#include <Config.h>
+#include <EEConf.h>
 #include <Net.h>
 
 #ifdef NET_SERIAL
@@ -179,7 +179,6 @@ uint8_t Net::flush(void) {
 // Poll the rf12 network and return true if a packet has been received
 // ACKs are processed automatically (and are expected not to have data,
 // but do include the RSSI to make for simple round-trip measurements)
-extern Port led;
 uint8_t Net::poll(void) {
 #ifndef NET_NONE
   bool rcv = rf12_recvDone();
@@ -197,7 +196,6 @@ uint8_t Net::poll(void) {
       // Ack packet, check that it's for us and that we're waiting for an ACK
       //Serial.print("Got ACK for "); Serial.println(rf12_hdr, 16);
       getRssi();
-      led.digiWrite(HIGH);
       if ((rf12_hdr&RF12_HDR_MASK) == node_id && bufCnt > 0 && sendCnt > 0) {
         lastAckRssi = rf12_len == 1 ? rf12_data[0] : 0;
         // pop packet from queue
@@ -282,7 +280,7 @@ void Net::applyConfig(uint8_t *cf) {
     eeprom = (net_config *)alloca(sizeof(net_config));
     // we need to punch-in some default values
     eeprom->radio_mode = NET_MODE_NORMAL;
-    config_write(NET_MODULE, eeprom);
+    eeconf_write(NET_MODULE, eeprom);
   }
   initRadio(eeprom->radio_mode);
 }

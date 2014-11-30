@@ -30,10 +30,10 @@ private:
 
 public:
   // constructor, uses default log initialization (serial + rf12b)
-  Log(void);
+  Logger(void);
 
   // constructor, explicit default log initialization (gets overridden by EEPROM)
-  Log(log_config defaults);
+  Logger(log_config defaults);
 
   // write a character to the buffer, used by Print but can also be called explicitly
   // automatically prints/sends the buffer when it's full or a \n is written

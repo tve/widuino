@@ -4,7 +4,7 @@
 //
 
 #include <JeeLib.h>
-#include <Config.h>
+#include <EEConf.h>
 #include <Net.h>
 #include <Logger.h>
 
@@ -13,9 +13,9 @@
 Logger::Logger(void) {
   init();
 #ifdef LOG_NORF12B
-  this->defaults = (log_config){1, 0, 0, 0, 0};  // serial only
+  this->defaults = (log_config){1, 0, 0};  // serial only
 #else
-  this->defaults = (log_config){1, 0, 1, 0, 0};  // serial and rf12b
+  this->defaults = (log_config){1, 0, 1};  // serial and rf12b
 #endif
 }
 
@@ -88,7 +88,7 @@ void Logger::applyConfig(uint8_t *cf) {
   } else {
     memset(&config, 0, sizeof(log_config));
     config = defaults;
-    config_write(LOG_MODULE, &config);
+    eeconf_write(LOG_MODULE, &config);
   }
   Serial.print(F("Config Log:"));
   if (config.serial) Serial.print(F(" serial"));
