@@ -1,0 +1,22 @@
+#
+# Connectors and wires to pressure and temperature sensors
+#
+
+# Pressure sensor: 24PCBFA6D
+# Pin 1: 5v, blue
+# Pin 2: V-, orange-white
+# Pin 3: GND, blue-white
+# Pin 4: V+, orange
+
+# Temperature sensor: DS18B20
+# Pin 1: GND, green-white
+# Pin 2: DQ: green
+# Pin 3: NC, cut
+
+# Connector:
+# Pin 1: GND DS18B20 green-white
+# Pin 2: DQ  DS18B20 green
+# Pin 3: 5v  24PC    blue
+# Pin 4: V-  24PC    orange-white
+# Pin 5: GND 24PC    blue-white
+# Pin 6: V+  24PC    orange
