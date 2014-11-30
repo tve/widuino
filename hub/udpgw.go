@@ -16,15 +16,14 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"net"
 	"sync"
 	"time"
 
+	"./database"
+
 	"github.com/golang/glog"
 )
-
-type Message map[string]interface{}
 
 // message type codes used in UDP packets
 const (
@@ -43,10 +42,10 @@ const (
 // UDP Gateway communicates with UDP/RF gateway nodes via UDP
 // Registers as "UDP-Gateway"
 type UDPGateway struct {
-	Port     int          // UDP port number
-	Recv     chan Message // channel for received messages
-	Xmit     chan Message // channel to transmit messages
-	Boot     Booter       // where to call to get boot data
+	Port     int                     // UDP port number
+	Recv     chan database.RFMessage // channel for received messages
+	Xmit     chan database.RFMessage // channel to transmit messages
+	Boot     Booter                  // where to call to get boot data
 	sock     *net.UDPConn
 	groupMap *GroupMap // map between groups and GW IP addresses
 }
@@ -85,26 +84,12 @@ func (u *UDPGateway) sendPacket(group, node, flags byte, data []byte) {
 // Get packets to xmit, encode them, and ship them out
 func (u *UDPGateway) Transmitter() {
 	for m := range u.Xmit {
-		if node, ok := m["node"].(byte); ok {
-			group, gOk := m["group"].(byte)
-			kind, kOk := m["kind"].(byte)
-			data, dOk := m["data"].([]byte)
-			if gOk && dOk {
-				var flags byte = 0x3 // data_req
-				if node == 0 {
-					flags = 0x0 // bcast_push
-				}
-				if kOk {
-					data = append([]byte{kind}, data...)
-				}
-				u.sendPacket(group, node, flags, data)
-			} else {
-				glog.Error("Message lacks group(%t) or data(%t): %+v",
-					!gOk, !dOk, m)
-			}
-		} else {
-			glog.Error("Unknown Message kind: %+v", m)
+		var flags byte = 0x3 // data_req
+		if m.Node == 0 {
+			flags = 0x0 // bcast_push
 		}
+		data := append([]byte{m.Kind}, m.Data...)
+		u.sendPacket(m.Group, m.Node, flags, data)
 	}
 }
 
@@ -230,29 +215,30 @@ func (u *UDPGateway) Receiver() {
 			glog.Infof("UDP-GW: %s", string(data[3:]))
 		// Standard data packet, produce a Message
 		case 0, 1:
-			msg := Message{
-				"rf":    fmt.Sprintf("RFg%di%d", groupId, nodeId),
-				"group": groupId,
-				"node":  nodeId,
-				"at":    time.Now(),
+			m := database.RFMessage{
+				Group: groupId,
+				Node:  nodeId,
+				At:    time.Now().UnixNano() / 1000000,
 			}
-			var kind byte
-			if pktLen > 3 {
-				kind = data[3]
-				msg["kind"] = kind
-				msg["data"] = data[4:]
+			if nodeId == 31 {
+				// hack to handle the fact that the early versions of the UDP GW node
+				// don't use a _kind_ byte in the messages
+				m.Kind = 8 // GW_RSSI_MODULE
+				m.Data = data[3:]
+			} else if pktLen > 3 {
+				m.Kind = data[3]
+				m.Data = data[4:]
 			} else {
-				msg["data"] = data[3:]
+				m.Data = data[3:]
 			}
-			glog.Infof("UDP Recv: src=%v RF%di%d kind=%d len=%d",
-				pktSrc, groupId, nodeId, kind, pktLen)
-			glog.V(4).Infof("  Pkt=%+v", data[0:min(len(data), 10)])
+			glog.Infof("UDP Recv: src=%v %s len=%d", pktSrc, m.RfTag(), pktLen)
+			glog.V(4).Infof("  Pkt=%+v", m.Data[0:min(len(m.Data), 10)])
 			// If an ACK is requested we should send that asap
 			if flags&1 != 0 {
 				u.sendPacket(groupId, nodeId, 0x6, []byte{})
 			}
 			// Now process what we got
-			u.Recv <- msg
+			u.Recv <- m
 		}
 	}
 }

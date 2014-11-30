@@ -1,0 +1,1 @@
+make && ./nodegw -logtostderr -bootConfig ../nodes/boot_info.json

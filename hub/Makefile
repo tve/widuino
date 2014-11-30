@@ -1,12 +1,12 @@
-# Makefile for nodegw
-NAME=nodegw
+# Makefile for simple Golang projects
+NAME=hub
 
 build: $(NAME)
 $(NAME): *.go
 	go build -o $(NAME)
 
 verbosetest: $(NAME)
-	ginkgo -noColor -- -logtostderr=true
+	ginkgo -noColor -- -logtostderr
 
 test: $(NAME)
 	ginkgo -noColor
