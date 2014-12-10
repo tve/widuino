@@ -1,0 +1,17 @@
+# JeeNode over-the-air boot information used by the udpgw booter
+
+{     # Hardware ID                          NodeType GroupId NodeId
+	"00000000000000000000000000000000": [    100,    212,     13 ], # Virgin node
+	"94df42dc3e9a08390000000000000000": [    100,    212,     12 ], # Test node
+	"d7c19655393299d50000000000000000": [    102,    212,      2 ], # Wetland node
+	"bc49437b64f66cff0000000000000000": [    100,    212,      3 ]  # Heating node
+
+}
+
+# Map nodeType to hex file
+{     # NodeType  Hex file relative to this config file
+	"100":    "../nodes/temp_node/temp_node.hex",
+	"102":    "../nodes/water_level/water_level.hex"
+}
+
+
