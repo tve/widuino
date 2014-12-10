@@ -11,13 +11,14 @@ import (
 	"github.com/golang/glog"
 	"github.com/syndtr/goleveldb/leveldb"
 	dbutil "github.com/syndtr/goleveldb/leveldb/util"
+	"github.com/tve/widuino/gears"
 )
 
 type DB struct {
 	ldb             *leveldb.DB
 	path            string
 	subscriberMutex sync.Mutex
-	subscribers     []chan RFMessage
+	subscribers     []chan gears.RFMessage
 	subscriberStart []int64
 }
 
@@ -27,7 +28,7 @@ func Open(path string) (*DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("database.Open %s: %s", path, err.Error())
 	}
-	return &DB{ldb, path, sync.Mutex{}, make([]chan RFMessage, 0), make([]int64, 0)}, nil
+	return &DB{ldb, path, sync.Mutex{}, make([]chan gears.RFMessage, 0), make([]int64, 0)}, nil
 }
 
 func (db *DB) Close() {

@@ -2,7 +2,7 @@
 NAME=hub
 
 build: $(NAME)
-$(NAME): *.go
+$(NAME): *.go */*.go
 	go build -o $(NAME)
 
 verbosetest: $(NAME)

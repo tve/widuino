@@ -1,4 +1,4 @@
-# Boards: 0=defaults, 1=antenna GW, 2=desk GW, 3=other GW
+# Boards: 0=defaults, 1=antenna GW, 2=basement GW, 3=other GW
 CPPFLAGS = -DBOARD=2
 
 all: rf12-udp-gw.hex udpgw

@@ -31,9 +31,10 @@
 #define LOG_UDP                 1       // log via UDP to hub router using debug messages
 #define LOG_SERIAL              0       // log on the serial port
 
-#define DEBUG_UDP               0       // logs all UDP packets
-#define DEBUG_RF                0       // logs all RF packets
-#define DEBUG_IP                0       // logs DHCP/ARP/IP assignment
+#define DEBUG_UDP               0       // logs all UDP packets to serial
+#define DEBUG_RF                0       // logs all RF packets to serial
+#define DEBUG_IP                0       // logs DHCP/ARP/IP assignment to serial
+#define DEBUG_NTP		1	// logs NTP info to logger
 
 #define LED_RED_PORT            4       // JeeNode port for red LED
 #define LED_RCV_PORT            3       // JeeNode port for yellow/green LEDs
@@ -47,6 +48,7 @@
 
 #define IP_ADDR		{ 192, 168, 0, 99
 #define MAC_ADDR	{ 0x74,0x69,0x69,0x2D,0x30,0x99 }
+#define NAME		"generic"
 
 // TvE's UDP-GWs
 #if BOARD == 1		// settings for antenna udp-gw
@@ -55,18 +57,21 @@
 #define RF12_GROUP           0x01       // Group 1
 #define IP_ADDR		{ 192, 168, 0, 24 }
 #define MAC_ADDR	{ 0x74,0x69,0x69,0x2D,0x30,0x24 }
-#elif BOARD == 2	// settings for debug udp-gw
+#define NAME		"Antenna"
+#elif BOARD == 2	// settings for basement udp-gw
 #define LED_RED_PORT            4       // JeeNode port for red LED
 #define LED_RCV_PORT            3       // JeeNode port for yellow/green LEDs
 #define RF12_GROUP           0xD4       // 0xD4 is JeeLabs' default group
 #define IP_ADDR		{ 192, 168, 0, 25 }
 #define MAC_ADDR	{ 0x74,0x69,0x69,0x2D,0x30,0x25 }
+#define NAME		"Basement"
 #elif BOARD == 3	// settings for 3rd udp-gw
 #define LED_RED_PORT            4       // JeeNode port for red LED
 #define LED_RCV_PORT            3       // JeeNode port for yellow/green LEDs
 #define RF12_GROUP           0x02       // Group 2
 #define IP_ADDR		{ 192, 168, 0, 26 }
 #define MAC_ADDR	{ 0x74,0x69,0x69,0x2D,0x30,0x26 }
+#define NAME		"Other"
 #endif
 
 // my IP configuration
@@ -74,9 +79,11 @@ static uint8_t my_ip[] = IP_ADDR;       // my IP address, statically assigned
 static byte mymac[]    = MAC_ADDR;
 
 // NTP server
-#define NTP			0       // whether to do NTP or not
+#define NTP			1       // whether to do NTP or not
 #if NTP
-static byte ntpServer[] = { 192, 168, 0, 3 };
+#include <Time.h>
+#define NTPTIME_MODULE      3
+static byte ntpServer[] = { 192, 168, 0, 1 };
 static word ntpPort = 123;              // port on which NTP responds
 #endif
 
@@ -105,6 +112,7 @@ static uint32_t num_eth_snd = 0;      // counter of ethernet packets sent
 // RSSI data for all the nodes
 #define RF12_NUMID 32                 // number of nodes
 #if RF12_RSSI
+// We don't store RSSI for node 0 (special) or node 31 (ourselves)
 static uint8_t rcvRssi[RF12_NUMID-2]; // RSSI measured by ourselves
 static uint8_t ackRssi[RF12_NUMID-2]; // RSSI received from remote node in ACK packets
 #endif
@@ -282,7 +290,7 @@ uint8_t rf12_getRssi() {
   return (uint16_t)(analogRead(RSSI_PIN)-300) >> 2;
 }
 #elif RF12_RSSI == 2
-/* digital RSSI */
+/* digital RSSI, not supported */
 #else
 void rf12_initRssi() { }
 uint8_t rf12_getRssi() { return 0; }
@@ -356,6 +364,7 @@ void setup() {
   chkTimer.poll(1000);
 
   Serial.println(F("***** RUNNING: " __FILE__));
+  logger.println(F(NAME " GW"));
   rcvLed.digiWrite2(0);       // turn yellow off
   rcvLed.digiWrite(0);        // turn green off
 }
@@ -397,6 +406,7 @@ void loop() {
     *ptr++ = 0;                                         // bcast_push message type
     *ptr++ = RF12_GROUP;
     *ptr++ = RF12_ID;
+    *ptr++ = 8; // GW_RSSI_MODULE
     *ptr++ = num_rf12_rcv;
     *ptr++ = num_rf12_snd;
     *ptr++ = num_eth_rcv;
@@ -432,19 +442,21 @@ void loop() {
   // Receive RF12 packets.
   // rf12_recvDone returns true if it received a broadcast packet (D=0)
   // -or- D=1 and the dest is us -or- D=1 and the dest is node 31
-  if (rf12_recvDone()) {
+  if (rf12_recvDone() && rf12_crc == 0) {
     num_rf12_rcv++;
 
 #if RF12_RSSI
     // Record RSSIs
     uint8_t node = rf12_hdr & RF12_HDR_MASK;
-    if ((rf12_hdr & RF12_HDR_DST) == 0) { // if the pkt has the source address
-      rcvRssi[node] = rf12_getRssi();
-    }
-    if ((rf12_hdr & ~RF12_HDR_MASK) == RF12_HDR_CTL && // ACK pkt with source addr
-        rf12_len == 1)                                 // and with one data byte
-    {
-      ackRssi[node-2] = rf12_data[0];
+    if node > 1 && node < RF12_NUMID-1) {
+      if ((rf12_hdr & RF12_HDR_DST) == 0) { // if the pkt has the source address
+        rcvRssi[node-1] = rf12_getRssi();
+      }
+      if ((rf12_hdr & ~RF12_HDR_MASK) == RF12_HDR_CTL && // ACK pkt with source addr
+          rf12_len == 1)                                 // and with one data byte
+      {
+        ackRssi[node-1] = rf12_data[0];
+      }
     }
 #endif
 
@@ -522,22 +534,24 @@ void loop() {
       // Try to send it once on the rf12 radio (don't let it get stale)
       // We could try and adjust for the ethernet+rf12 delay, but too much trouble...
       if (rf12_canSend()) {
-        struct net_time { uint8_t module; uint32_t time; } tbuf = { NETTIME_MODULE, time };
+        struct net_time { uint8_t module; uint32_t time; } tbuf = { NTPTIME_MODULE, time };
         rf12_sendStart(RF12_ID, &tbuf, sizeof(tbuf));
         num_rf12_snd++;
-        //logger.println(F("Sent time update"));
+#if DEBUG_NTP
+        logger.println(F("Sent time update"));
       } else {
-        //logger.println(F("Cannot send time update"));
+        logger.println(F("Cannot send time update"));
+#endif
       }
 
       // print the time
       time_t t = now();
+      logger.print(year(t));   logger.print('/');
       logger.print(month(t));  logger.print('/');
-      logger.print(day(t));    logger.print('/');
-      logger.print(year(t));   logger.print(' ');
+      logger.print(day(t));    logger.print(' ');
       logger.print(hour(t));   logger.print(':');
       logger.print(minute(t)); logger.print(':');
-      logger.print(second(t)); logger.print(" = ");
+      logger.print(second(t)); logger.print(" UTC = ");
       logger.print(time);
       //logger.print('.');       logger.print(frac);
       logger.println();
@@ -556,4 +570,4 @@ void loop() {
   
 }
 
-//vim: set shiftwidth=2 expandtab
+//vim: set shiftwidth=2 tabstop=2 expandtab

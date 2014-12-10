@@ -3,7 +3,10 @@
 
 package database
 
-import "github.com/golang/glog"
+import (
+	"github.com/golang/glog"
+	"github.com/tve/widuino/gears"
+)
 
 /*
 func (db *DB) subscribeAt(start int64) chan RFMessage {
@@ -16,15 +19,15 @@ func (db *DB) subscribeAt(start int64) chan RFMessage {
 }
 */
 
-func (db *DB) Subscribe(start int64) chan RFMessage {
-	c := make(chan RFMessage, 100)
+func (db *DB) Subscribe(start int64) chan gears.RFMessage {
+	c := make(chan gears.RFMessage, 100)
 	go db.catchUpSubscribe(start, c)
 	return c
 }
 
 // catch-up on old messages from the database and then switch atomically into
 // a subscription
-func (db *DB) catchUpSubscribe(start int64, c chan RFMessage) {
+func (db *DB) catchUpSubscribe(start int64, c chan gears.RFMessage) {
 
 	// replay messages from the database while holding the subscribers lock to
 	// prevent anything from being published. Use non-blocking channel send
@@ -37,8 +40,11 @@ func (db *DB) catchUpSubscribe(start int64, c chan RFMessage) {
 		// replay old events and keep track of last one
 		var lastAt int64
 		locked := true
-		db.RFIterate(start, 0, func(m RFMessage) error {
+		count := 0
+		db.RFIterate(start, 0, func(m gears.RFMessage) error {
+			count += 1
 			lastAt = m.At
+			//glog.V(2).Infof("Sending m=%x d=%x", &m, &(m.Data))
 			select {
 			case c <- m:
 				// sent, good...
@@ -52,6 +58,7 @@ func (db *DB) catchUpSubscribe(start int64, c chan RFMessage) {
 			}
 			return nil
 		})
+		glog.V(2).Infof("Sent %d catch-up messages", count)
 		return lastAt, locked
 	}
 
@@ -72,13 +79,14 @@ func (db *DB) catchUpSubscribe(start int64, c chan RFMessage) {
 				glog.Fatalf("subscriber array mismatch %d != %d",
 					len(db.subscribers), len(db.subscriberStart))
 			}
+			glog.V(2).Infof("Subscriber %v now caught up", c)
 			return
 		}
 		lastAt += 1
 	}
 }
 
-func (db *DB) Unsubscribe(c chan RFMessage) {
+func (db *DB) Unsubscribe(c chan gears.RFMessage) {
 	db.subscriberMutex.Lock()
 	defer db.subscriberMutex.Unlock()
 	for i := 0; i < len(db.subscribers); i += 1 {
@@ -100,7 +108,7 @@ func (db *DB) Unsubscribe(c chan RFMessage) {
 	}
 }
 
-func (db *DB) Publish(m RFMessage) {
+func (db *DB) Publish(m gears.RFMessage) {
 	db.subscriberMutex.Lock()
 	defer db.subscriberMutex.Unlock()
 	for i := range db.subscribers {
@@ -108,4 +116,5 @@ func (db *DB) Publish(m RFMessage) {
 			db.subscribers[i] <- m
 		}
 	}
+	glog.V(2).Infof("Published: %d to %d subscribers", m.At, len(db.subscribers))
 }

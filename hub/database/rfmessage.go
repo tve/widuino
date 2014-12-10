@@ -10,26 +10,13 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/tve/widuino/gears"
 )
-
-type RFMessage struct {
-	At    int64  // milliseconds since unix epoch
-	Group byte   // RF network group
-	Node  byte   // RF node ID (Node=0 -> bcast)
-	DoAck bool   // Send with ack requested
-	Kind  byte   // Message payload type ("module" numbers)
-	Data  []byte // Message payload
-	//Xtra map[string]interface{} // Extra info added during processing
-}
-
-func (m RFMessage) RfTag() string {
-	return fmt.Sprintf("RFg%di%dk%d", m.Group, m.Node, m.Kind)
-}
 
 const prefix = "raw/"
 
-func NewProcessor(db *DB) func(chan RFMessage) {
-	return func(in chan RFMessage) {
+func (db *DB) NewProcessor() func(chan gears.RFMessage) {
+	return func(in chan gears.RFMessage) {
 		go func() {
 			for m := range in {
 				err := db.PutRFMessage(m)
@@ -41,11 +28,12 @@ func NewProcessor(db *DB) func(chan RFMessage) {
 	}
 }
 
-func (db *DB) PutRFMessage(m RFMessage) error {
+func (db *DB) PutRFMessage(m gears.RFMessage) error {
 	if m.At == 0 {
 		// Add the time in milliseconds since the epoch
 		m.At = time.Now().UnixNano() / 1000000
 	}
+	glog.V(2).Infof("Put: %d %+v", m.At, m)
 	// Form the key
 	key := genRFKey(m.At)
 	// Write data
@@ -69,14 +57,16 @@ func parseRFKey(str string) (int64, error) {
 	return strconv.ParseInt(str[len(prefix):], 10, 64)
 }
 
-func (db *DB) RFIterate(start, end int64, handle func(m RFMessage) error) error {
+func (db *DB) RFIterate(start, end int64, handle func(m gears.RFMessage) error) error {
 	startKey := genRFKey(start)
 	endKey := genRFKey(math.MaxInt64)
 	if end > 0 {
 		endKey = genRFKey(end)
 	}
-	var m RFMessage
+	var m gears.RFMessage
 	return db.Iterate(startKey, endKey, &m, func(key string) error {
-		return handle(m)
+		err := handle(m)
+		m = gears.RFMessage{} // we wipe out m.Data in particular so it doesn't get reused
+		return err
 	})
 }

@@ -11,21 +11,18 @@
 package main
 
 import (
-	"./database"
 	"fmt"
 	"os"
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/tve/widuino/gears"
 )
 
-const datalog = "./_log"
+const logDir = "_log"
 
-func init() {
-	RegisterRecvProcessor(LogProcessor)
-}
-
-func LogProcessor(in chan database.RFMessage) {
+func LogProcessor(in chan gears.RFMessage) {
+	os.Mkdir(logDir, 0775)
 	go func() {
 		var log_fd *os.File
 		log_name := ""
@@ -35,7 +32,7 @@ func LogProcessor(in chan database.RFMessage) {
 			str := fmt.Sprintf("%s %02x %02d %02x %02d: % x\n",
 				t, m.Group, m.Node, m.Kind, len(m.Data)+1, m.Data)
 			// Open log file if necessary
-			name := fmt.Sprintf("%s/%s.wd", datalog, time.Now().Format("2006-01-02"))
+			name := fmt.Sprintf("%s/%s.wd", logDir, time.Now().Format("2006-01-02"))
 			if name != log_name {
 				if log_fd != nil {
 					log_fd.Close()

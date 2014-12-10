@@ -20,9 +20,8 @@ import (
 	"sync"
 	"time"
 
-	"./database"
-
 	"github.com/golang/glog"
+	"github.com/tve/widuino/gears"
 )
 
 // message type codes used in UDP packets
@@ -42,10 +41,10 @@ const (
 // UDP Gateway communicates with UDP/RF gateway nodes via UDP
 // Registers as "UDP-Gateway"
 type UDPGateway struct {
-	Port     int                     // UDP port number
-	Recv     chan database.RFMessage // channel for received messages
-	Xmit     chan database.RFMessage // channel to transmit messages
-	Boot     Booter                  // where to call to get boot data
+	Port     int                  // UDP port number
+	Recv     chan gears.RFMessage // channel for received messages
+	Xmit     chan gears.RFMessage // channel to transmit messages
+	Boot     Booter               // where to call to get boot data
 	sock     *net.UDPConn
 	groupMap *GroupMap // map between groups and GW IP addresses
 }
@@ -166,15 +165,14 @@ func (u *UDPGateway) handleDownloadRequest(pktSrc *net.UDPAddr, groupId, nodeId 
 // Receive UDP packets, decode them, and output them
 // The packet format is (by byte): flags, group, node_id, kind, data...
 func (u *UDPGateway) Receiver() {
-	pkt := make([]byte, 1600)
 	for {
 		glog.V(2).Infoln("******************************")
+		pkt := make([]byte, 1600)
 		pktLen, pktSrc, err := u.sock.ReadFromUDP(pkt)
 		if err != nil {
 			glog.Warning("UDP error: " + err.Error())
 			continue
 		}
-		data := pkt[0:pktLen]
 		if pktLen < 3 {
 			glog.Infof("UDP: got too short a packet (%d) from %v", pktLen, pktSrc)
 			continue
@@ -184,6 +182,7 @@ func (u *UDPGateway) Receiver() {
 			continue
 		}
 		// got a reasonable packet
+		data := pkt[0:pktLen]
 		flags := data[0]
 		groupId := data[1]
 		nodeId := data[2]
@@ -213,14 +212,22 @@ func (u *UDPGateway) Receiver() {
 		// Special packet to log from UDP GW itself
 		case 9:
 			glog.Infof("UDP-GW: %s", string(data[3:]))
+			m := gears.RFMessage{
+				Group: groupId,
+				Node:  nodeId,
+				At:    time.Now().UnixNano() / 1000000,
+				Kind:  2, // LOG module
+				Data:  append([]byte("GW "), data[3:]...),
+			}
+			u.Recv <- m
 		// Standard data packet, produce a Message
 		case 0, 1:
-			m := database.RFMessage{
+			m := gears.RFMessage{
 				Group: groupId,
 				Node:  nodeId,
 				At:    time.Now().UnixNano() / 1000000,
 			}
-			if nodeId == 31 {
+			if nodeId == 31 && len(m.Data)&1 == 0 {
 				// hack to handle the fact that the early versions of the UDP GW node
 				// don't use a _kind_ byte in the messages
 				m.Kind = 8 // GW_RSSI_MODULE
