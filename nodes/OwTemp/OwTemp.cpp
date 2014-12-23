@@ -1,7 +1,7 @@
 #include <JeeLib.h>
 #include <OwTemp.h>
-#include <Config.h>
-#include <Log.h>
+#include <EEConf.h>
+#include <Logger.h>
 
 #define OWTEMP_CONVTIME 188 // milliseconds for a conversion (10 bits)
 #define TEMP_OFFSET      88 // offset used to store min/max in 8 bits
@@ -251,9 +251,9 @@ int16_t OwTemp::rawRead(uint64_t addr) {
 	OneWire ds = os->getOneWire();
   byte data[12];
   ds.reset();
-  ds.select((uint8_t *)&addr);    
+  ds.select((uint8_t *)&addr);
   ds.write(0xBE);         // Read Scratchpad
-  
+
   for (byte i = 0; i < 9; i++) {           // we need 9 bytes
     data[i] = ds.read();
   }
@@ -287,7 +287,7 @@ int16_t OwTemp::rawRead(uint64_t addr) {
   os->printAddr(&Serial, *(uint64_t *)data);
   Serial.println();
 #endif
-  
+
   // mask out bits according to precision of conversion
   int16_t raw = ((uint16_t)data[1] << 8) | data[0];
   int16_t t_mask[4] = {0x7, 0x3, 0x1, 0x0};
@@ -313,6 +313,6 @@ float OwTemp::read(uint64_t addr) {
 	Serial.print(fahrenheit);
 	Serial.println("F");
 #endif
-  
+
   return fahrenheit;
 }

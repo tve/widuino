@@ -42,7 +42,7 @@ func (db *DB) PutRFMessage(m gears.RFMessage) error {
 		return err
 	}
 	// Publish to subscribers
-	db.Publish(m)
+	db.RFPublish(m)
 	return nil
 }
 

@@ -12,24 +12,6 @@ import (
 	"github.com/tve/widuino/gears"
 )
 
-// ===== Request type dictionary
-
-/*
-var RequestTypes map[string]reflect.Type = make(map[string]reflect.Type)
-var requestTypesLock sync.Mutex
-
-func AddRequestType(name string, t interface{}) {
-	requestTypesLock.Lock()
-	defer requestTypesLock.Unlock()
-	RequestTypes[name] = reflect.TypeOf(t)
-}
-
-func init() {
-	AddRequestType("echo", EchoRequest{})
-	AddRequestType("rf-sub", SubRequest{})
-}
-*/
-
 // ===== Request handling loops
 
 func handleRequest(receiver libchan.Receiver) error {
@@ -47,8 +29,8 @@ func handleRequest(receiver libchan.Receiver) error {
 		return HandleRFSubRequest(req.RFS)
 	case req.RF != nil:
 		return HandleRFSendRequest(req.RF)
-	case req.DM != nil:
-		return HandleDefineMetricRequest(req.DM)
+	case req.SI != nil:
+		return HandleSensorInfoRequest(req.DM)
 	case req.SD != nil:
 		return HandleSensorDataRequest(req.SD)
 	case req.SR != nil:

@@ -1,8 +1,8 @@
 #include <JeeLib.h>
 #include <OwRelay.h>
 #include <OneWire.h> // needed by makefile, ugh
-#include <Config.h>
-#include <Log.h>
+#include <EEConf.h>
+#include <Logger.h>
 
 #define DEBUG 0
 
@@ -123,7 +123,7 @@ uint8_t OwRelay::setup(Print *printer) {
   printer->print(rlyCount);
   printer->println(F(" switches"));
 
-  config_write(OWRELAY_MODULE, rlyAddr);
+  eeconf_write(OWRELAY_MODULE, rlyAddr);
 
   // start a poll
   loop(0);
@@ -224,7 +224,7 @@ void OwRelay::printDebug(Print *printer) {
     printer->print(s);
     printer->print(": ");
     printAddr(printer, rlyAddr[s]);
-    if (rlyAddr[s] != 0) { 
+    if (rlyAddr[s] != 0) {
       printer->print(" now:");
       printer->print(rlyState[s]);
     }
@@ -285,7 +285,7 @@ int8_t OwRelay::read(uint64_t addr) {
   Serial.print(value);
   Serial.println();
 #endif
-  
+
   return value;
 }
 

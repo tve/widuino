@@ -29,11 +29,11 @@
 //===== CUSTOMIZABLE CONFIGURATION =====
 
 #define LOG_UDP                 1       // log via UDP to hub router using debug messages
-#define LOG_SERIAL              0       // log on the serial port
+#define LOG_SERIAL              1       // log on the serial port
 
 #define DEBUG_UDP               0       // logs all UDP packets to serial
-#define DEBUG_RF                0       // logs all RF packets to serial
-#define DEBUG_IP                0       // logs DHCP/ARP/IP assignment to serial
+#define DEBUG_RF                1       // logs all RF packets to serial
+#define DEBUG_IP                1       // logs DHCP/ARP/IP assignment to serial
 #define DEBUG_NTP		1	// logs NTP info to logger
 
 #define LED_RED_PORT            4       // JeeNode port for red LED
@@ -121,6 +121,7 @@ static uint8_t ackRssi[RF12_NUMID-2]; // RSSI received from remote node in ACK p
 #if NTP
 static uint32_t time, frac;
 #endif
+static byte rf12_fail = 0; // number of consecutive failed sends (somehow locks up)
 
 #if 0
 //===== CRC-16 for UDP packets =====
@@ -313,6 +314,20 @@ void dumpMem(void) {
 }
 #endif
 
+//==== init RF12 =====
+
+void init_rf12() {
+  rf12_initialize(RF12_ID, RF12_BAND, RF12_GROUP);
+#if RF12_LOWPOWER
+  Serial.println(F("RF12: low TX power"));
+  rf12_lowpower();
+#endif
+#if RF12_19KBPS
+  Serial.println(F("RF12: 19kbps"));
+  rf12_19kbps();
+#endif
+}
+
 //===== setup =====
 
 void setup() {
@@ -334,15 +349,7 @@ void setup() {
   Serial.print(RF12_GROUP);
   Serial.print(" i");
   Serial.println(RF12_ID);
-  rf12_initialize(RF12_ID, RF12_BAND, RF12_GROUP);
-#if RF12_LOWPOWER
-  Serial.println(F("RF12: low TX power"));
-  rf12_lowpower();
-#endif
-#if RF12_19KBPS
-  Serial.println(F("RF12: 19kbps"));
-  rf12_19kbps();
-#endif
+  init_rf12();
   
   // Print MAC address for debugging
   Serial.print("MAC: ");
@@ -448,7 +455,7 @@ void loop() {
 #if RF12_RSSI
     // Record RSSIs
     uint8_t node = rf12_hdr & RF12_HDR_MASK;
-    if node > 1 && node < RF12_NUMID-1) {
+    if (node > 1 && node < RF12_NUMID-1) {
       if ((rf12_hdr & RF12_HDR_DST) == 0) { // if the pkt has the source address
         rcvRssi[node-1] = rf12_getRssi();
       }
@@ -539,8 +546,13 @@ void loop() {
         num_rf12_snd++;
 #if DEBUG_NTP
         logger.println(F("Sent time update"));
+	rf12_fail = 0;
       } else {
         logger.println(F("Cannot send time update"));
+	if (++rf12_fail > 20) {
+	  init_rf12();
+	  rf12_fail = 0;
+	}
 #endif
       }
 

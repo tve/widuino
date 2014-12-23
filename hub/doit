@@ -1,1 +1,1 @@
-make && ./hub -logtostderr -bootConfig ../nodes/boot_info.json
+make && ./hub -logtostderr -bootConfig ../wcc/boot_info.json

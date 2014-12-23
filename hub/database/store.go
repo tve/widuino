@@ -15,11 +15,14 @@ import (
 )
 
 type DB struct {
-	ldb             *leveldb.DB
-	path            string
-	subscriberMutex sync.Mutex
-	subscribers     []chan gears.RFMessage
-	subscriberStart []int64
+	ldb                   *leveldb.DB
+	path                  string
+	rfSubscriberMutex     sync.Mutex
+	rfSubscribers         []chan gears.RFMessage
+	rfSubscriberStart     []int64
+	sensorSubscriberMutex sync.Mutex
+	sensorSubscribers     map[string]*[]chan gears.SensorDataValue
+	sensorSubscriberStart map[string]*[]int64
 }
 
 func Open(path string) (*DB, error) {
@@ -28,7 +31,12 @@ func Open(path string) (*DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("database.Open %s: %s", path, err.Error())
 	}
-	return &DB{ldb, path, sync.Mutex{}, make([]chan gears.RFMessage, 0), make([]int64, 0)}, nil
+	return &DB{
+			ldb, path,
+			sync.Mutex{}, make([]chan gears.RFMessage, 0), make([]int64, 0),
+			sync.Mutex{}, make(map[string]*[]chan gears.SensorDataValue),
+			make(map[string]*[]int64)},
+		nil
 }
 
 func (db *DB) Close() {

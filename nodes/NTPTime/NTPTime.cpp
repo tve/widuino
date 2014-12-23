@@ -31,6 +31,6 @@ void NTPTime::applyConfig(uint8_t *cf) {
   if (cf)
     offset = ((ntptime_config *)cf)->offset;
   else
-    config_write(NTPTIME_MODULE, &offset);
+    eeconf_write(NTPTIME_MODULE, &offset);
 	Serial.println("NTPTime configured");
 }

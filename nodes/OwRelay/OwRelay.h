@@ -15,7 +15,7 @@
 // replacement switch before deleting the failed one (it also makes it easier to temporarily
 // add a switch for troubleshooting purposes).
 // If a switch fails to respond to a command it will immediately be retried a couple of times.
-// 
+//
 // Currently only a single OwRelay object can be instantiated at a time because multiple ones
 // would use the same EEPROM locations (this could be fixed easily).
 
@@ -24,7 +24,7 @@
 
 #define ONEWIRE_CRC8_TABLE 1
 #include <OneWire.h>
-#include <Config.h>
+#include <EEConf.h>
 
 #define INT16_MIN ((int16_t)0x8000)
 

@@ -13,31 +13,36 @@ const FormatAt = "2006-01-02 15:04:05.999"
 // ===== Request and Reply formats =====
 
 // "Union" of requests made over the main channel
-type MainRequest struct {
-	ER  *EchoRequest         // simple ping-pong test request
-	RFS *RFSubRequest        // subscribe to raw RF messages
-	RF  *RFSendRequest       // send a raw RF message
-	DM  *DefineMetricRequest // define a sensor metric
-	SD  *SensorDataRequest   // send sensor data
-	SR  *SensorReadRequest   // read averaged sensor data
-	SS  *SensorSubRequest    // subscribe to real-time sensor data
-	PP  *ParamPutRequest     // put an arbitrary parameter
-	PG  *ParamGetRequest     // get an arbitrary parameter
-}
-
-// Echo request - simple ping-pong test request
-type EchoRequest struct {
-	Text  string // string to echo
+type Request struct {
+	ER    *EchoRequest       // simple ping-pong test request
+	RFS   *RFSubRequest      // subscribe to raw RF messages
+	RF    *RFSendRequest     // send a raw RF message
+	SI    *SensorInfoRequest // get sensor info
+	SD    *SensorDataRequest // send sensor data
+	SR    *SensorReadRequest // read averaged sensor data
+	SS    *SensorSubRequest  // subscribe to real-time sensor data
+	PP    *ParamPutRequest   // put an arbitrary parameter
+	PG    *ParamGetRequest   // get an arbitrary parameter
 	Reply libchan.Sender
 }
-type EchoReply struct {
-	Text string // string echoed
+
+type Reply struct {
+	Code  int
+	Error string
+	ER    *EchoReply
+	PG    *ParamReply
+	SI    *SensorInfo
 }
 
-// Generic acknowledgment
-type AckReply struct {
-	Err string // empty string means success
-}
+const (
+	CodeOK = iota
+	CodeClientError
+	CodeServerError
+)
+
+// Echo request - simple ping-pong test request
+type EchoRequest string // string to echo
+type EchoReply string
 
 // Put an arbitrary parameter - used to store random stuff
 type ParamPutRequest struct {
@@ -45,23 +50,21 @@ type ParamPutRequest struct {
 	Value string
 }
 type ParamGetRequest struct {
-	Name  string
-	Reply libchan.Sender // string reply
+	Name string
+}
+type ParamReply struct {
+	Value string
 }
 
 // RFMessage Subscription request - subscribes to all RF Messages received by hub. The subscription
 // can start in the past, in which case messages are replayed from the database and then seamlessly
 // switched-over into the real-time stream.
 type RFSubRequest struct {
-	StartAt int64          // timestamp of first message, 0=start with real-time stream
-	Match   RFMessage      // matcher for messages (not yet implemented)
-	Reply   libchan.Sender // channel of RFMessage
+	StartAt  int64          // timestamp of first message, 0=start with real-time stream
+	Match    RFMessage      // matcher for messages (not yet implemented)
+	Messages libchan.Sender // channel of RFMessage
 }
-
-type RFSendRequest struct {
-	Msg   RFMessage
-	Reply libchan.Sender // channel of AckReply, Reply!=nil <=> Msg.DoAck
-}
+type RFSendRequest RFMessage
 
 // RF Message
 type RFMessage struct {
@@ -77,28 +80,25 @@ func (m RFMessage) RfTag() string {
 	return fmt.Sprintf("RFg%03di%02dk%02d", m.Group, m.Node, m.Kind)
 }
 
-// Define Metric request
-type DefineMetricRequest struct {
-	Name string // temperature, volt, level, ...
-	Unit string // F, V, mV, ...
+// Sensor Info requests
+
+type SensorInfoRequest struct {
+	Name string
+}
+type SensorInfo struct {
+	Unit string
 	Rate bool
 }
 
 // Sensor Data request
 type SensorDataRequest struct {
-	Name   string           // hierarchical sensor name & location
-	Metric string           // temp, volt, ...
+	Name   string // hierarchical sensor name & location
+	Info   SensorInfo
 	Values libchan.Receiver // channel of SensorDataValue
-	Acks   libchan.Sender   // channel of TimeAcks
 }
 type SensorDataValue struct {
 	At    int64 // milliseconds since unix epoch
 	Value float64
-}
-
-type TimeAck struct {
-	At  int64  // milliseconds since unix epoch
-	Err string // "" means no error
 }
 
 // Sensor Read request
@@ -107,12 +107,12 @@ type SensorReadRequest struct {
 	StartAt int64          // first data point, milliseconds since unix epoch
 	EndAt   int64          // last data point (inclusive), milliseconds since unix epoch
 	Step    int64          // step in millisecsond, (EndAt-StartAt)%Step must be 0
-	Reply   libchan.Sender // channel of SensorDataValue
+	Values  libchan.Sender // channel of SensorDataValue
 }
 
 // Sensor Subscription Request
 type SensorSubRequest struct {
 	Name    string
 	StartAt int64          // first data point, milliseconds since unix epoch
-	Reply   libchan.Sender // channel of SensorDataValue
+	Values  libchan.Sender // channel of SensorDataValue
 }
