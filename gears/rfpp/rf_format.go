@@ -21,11 +21,12 @@ func RFFormat(m gears.RFMessage) string {
 		}
 		return str
 	case 7: // Water level
-		if len(m.Data) != 2 {
+		if len(m.Data) != 4 {
 			return fmt.Sprintf("Water level: %d bytes? % x", len(m.Data), m.Data)
 		}
-		v := float32(uint16(m.Data[1])<<8|uint16(m.Data[0])) * 3.3 / 1024
-		return fmt.Sprintf("Water level: %.3f", v)
+		v1 := float32(uint16(m.Data[1])<<8|uint16(m.Data[0])) * 3.3 / 1024
+		v2 := float32(uint16(m.Data[3])<<8|uint16(m.Data[2])) * 3.3 / 1024
+		return fmt.Sprintf("Water levels: %.3fV %.3fV", v1, v2)
 	case 8: // GW RSSI
 		if len(m.Data) < 4 {
 			return fmt.Sprintf("RF RSSI %d bytes? % x", len(m.Data), m.Data)

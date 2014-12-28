@@ -24,27 +24,14 @@
 
 #define ONEWIRE_CRC8_TABLE 1
 #include <OneWire.h>
-#include <EEConf.h>
+#include <OwScan.h>
 
 #define INT16_MIN ((int16_t)0x8000)
 
-class OwRelay : public Configured {
+class OwRelay {
 public:
-  // Create OwRelay object for given pin and max number of switches. Initializes the pin but
-  // does not actually perform any one-wire communication
-  OwRelay (byte pin, uint8_t count=2);
-
-  // Create OwRelay object for given pin and max number of switches and also statically
-  // configure the addresses of the switches. This causes setup() not to read or write
-  // the EEPROM.
-  OwRelay (byte pin, uint8_t count, uint64_t *addr);
-
-  // Set everything up, starting with finding the existing and any new switches on the
-  // One-Wire bus. Reads the old EEPROM config and updates it according to what it finds.
-  // Setup can be called multiple times to update the config if switches are being added and
-  // removed.
-  // @return the number of switches found (may be higher than the number configured)
-  uint8_t setup(Print *printer);
+  // Create OwRelay object based on OwScan object and for given max number of switches.
+  OwRelay (OwScan *owScan, uint8_t max=2);
 
   // Poll all the switches every seconds interval. This can be called every iteration of the
   // wiring loop() function and keeps track of when an actual poll is necessary internally.
@@ -55,52 +42,26 @@ public:
   // Get the state of the nth switch
   bool get(uint8_t i);
 
-  // Get the state of a switch by address
-  bool getByAddr(uint64_t addr);
-
   // Set the state of the nth switch, returns true on success
   bool set(uint8_t i, bool value);
-
-  // Swap the position of two switches
-  void swap(uint8_t i, uint8_t j);
-
-  // Print the address in hex in standard one-wire order (high byte = family first)
-  // The printer must implement the Print interface, Serial is one example for this.
-  void printAddr(Print *printer, uint64_t addr);
-
-  // Print the address in hex in reverse order, which is how constants need to be
-  // entered into uint64_t variables.
-  void printAddrRev(Print *printer, uint64_t addr);
 
   // Print debug info
   void printDebug(Print *printer);
 
-  // ---- lower level methods ----
-
-  // Get the One-Wire address of the nth switch
-  uint64_t getAddr(uint8_t i);
-
-  // Configuration methods
-	virtual void applyConfig(uint8_t *);
-	virtual void receive(volatile uint8_t *pkt, uint8_t len);
-
-
 private:
-  OneWire ds;
+  OwScan *os;
 
-  uint8_t rlyCount;               // number of switches
-  byte convState;                 // temp conversion state: 0=off, 1=idle, 2=converting
-  unsigned long lastPoll;         // timestamp of last poll
-  uint64_t *rlyAddr;              // switch addresses
-  bool staticAddr;                // whether the addresses are static from the constructor
+  uint8_t rlyMax;                 // max number of relays
+  //uint8_t rlyCount;               // number of switches
   bool *rlyState;                 // current state for each switch
   uint16_t failed;                // bit vector of failed switches
+  unsigned long lastPoll;         // timestamp of last poll
 
-  void init(byte pin, uint8_t count);           // helper for constructors
+  void init(OwScan *owScan, uint8_t count);           // helper for constructors
 	void print(uint64_t addr);
 
-	int8_t read(uint64_t addr);
-  bool write(uint64_t addr, bool value);
+	int8_t rawRead(uint64_t addr);
+  bool rawWrite(uint64_t addr, bool value);
 };
 
 #endif

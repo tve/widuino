@@ -11,14 +11,16 @@ import (
 )
 
 func main() {
-	log.Printf("Opening libchan connection to localhost:9323")
 	gc, err := gears.Dial("localhost:9323")
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	start := (time.Now().Unix() - 10*60) * 1000
-	rfChan := gc.RFSubscribe(start)
+	rfChan, err := gc.RFSubscribe(start)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	for m := range rfChan {
 		ts := time.Unix(m.At/1000, (m.At%1000)*1000000).Format("2006-01-02 15:04:05.999")

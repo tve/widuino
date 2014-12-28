@@ -38,7 +38,10 @@ const (
 	CodeOK = iota
 	CodeClientError
 	CodeServerError
+	CodeAckTimeout
 )
+
+var AckTimeoutError = fmt.Errorf("ACK timeout")
 
 // Echo request - simple ping-pong test request
 type EchoRequest string // string to echo

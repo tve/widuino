@@ -3,7 +3,6 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"time"
 
@@ -11,118 +10,100 @@ import (
 	"github.com/tve/widuino/gears"
 )
 
-func HandleEchoRequest(req *gears.EchoRequest) error {
-	if req.Reply == nil {
-		return fmt.Errorf("Echo request has nil reply channel")
-	}
-	rep := gears.EchoReply{req.Text}
-	err := req.Reply.Send(rep)
-	if err != nil {
-		return err
-	}
-	req.Reply.Close()
-	return nil
+func HandleEchoRequest(req *gears.EchoRequest) gears.Reply {
+	return gears.Reply{Code: gears.CodeOK, ER: (*gears.EchoReply)(req)}
 }
 
 // ===== RF Message Requests
 
-func HandleRFSubRequest(req *gears.RFSubRequest) error {
-	if req.Reply == nil {
-		return fmt.Errorf("Sub request has nil reply channel")
+// subscribe to RF messages
+func HandleRFSubRequest(req *gears.RFSubRequest) gears.Reply {
+	if req.Messages == nil {
+		return gears.Reply{Code: gears.CodeClientError, Error: "Messages channel is nil"}
 	}
 	c := db.RFSubscribe(req.StartAt)
 	dt := req.StartAt/1000 - time.Now().Unix()
 	if req.StartAt <= 0 {
 		dt = 0
 	}
-	glog.Infof("Start RF subscriber %v at now%+ds", c, dt)
+	glog.Infof("Start RF subscriber %v at now%+dsecs", c, dt)
 
+	// goroutine that will actually stream the subscription data
 	go func() {
-		defer req.Reply.Close()
+		defer req.Messages.Close()
 		for m := range c {
 			glog.V(2).Infof("Sending to %v: %+v", c, m)
-			err := req.Reply.Send(m)
+			err := req.Messages.Send(m)
 			if err != nil {
 				db.RFUnsubscribe(c)
-				req.Reply.Close()
-				glog.Infof("Closed subscriber %v due to error: %s", c, err.Error())
+				glog.Infof("Closing subscriber %v due to error: %s", c, err.Error())
 				for _ = range c {
 					// drain the channel so the sender doesn't block
 				}
 				return
 			}
 		}
-		req.Reply.Close()
 		glog.Infof("Closed subscriber %v due to incoming EOF", c)
 		return
 	}()
-	return nil
+
+	return gears.Reply{Code: gears.CodeOK}
 }
 
-func HandleRFSendRequest(req *gears.RFSendRequest) error {
-	xmitChan <- req.Msg
-	if req.Reply == nil {
-		return nil
-	}
-	req.Reply.Send(gears.AckReply{""})
-	return nil
+func HandleRFSendRequest(req *gears.RFSendRequest) gears.Reply {
+	xmitChan <- gears.RFMessage(*req)
+	return gears.Reply{Code: gears.CodeOK}
 }
 
 // Sensor Requests
 
-func HandleSensorInfoRequest(req *gears.SensorInfoRequest) error {
-	if req.Reply == nil {
-		return fmt.Errorf("Sensor info request has nil reply channel")
-	}
+func HandleSensorInfoRequest(req *gears.SensorInfoRequest) gears.Reply {
 	info, err := db.GetSensorInfo(req.Name)
 	if err != nil {
+		return gears.Reply{Code: gears.CodeClientError, Error: err.Error()}
+	}
 
-	info.Metric = db.Get(fmt.Sprintf("/sens/%s/metric", req.Name), &info.Metric)
-	info.Unit = db.Get(fmt.Sprintf("/metric/%s/unit", info.Metric))
-	info.Rate = db.Get(fmt.Sprintf("/metric/%s/rate", info.Metric)) == "true"
-	err := req.Reply.Send(info)
-	return nil
+	return gears.Reply{Code: gears.CodeOK, SI: &info}
 }
 
-func HandleSensorSubRequest(req *gears.SensorSubRequest) error {
-	if req.Reply == nil {
-		return fmt.Errorf("Sensor sub request has nil reply channel")
+func HandleSensorSubRequest(req *gears.SensorSubRequest) gears.Reply {
+	if req.Values == nil {
+		return gears.Reply{Code: gears.CodeClientError, Error: "Values channel is nil"}
 	}
 	c := db.SensorSubscribe(req.Name, req.StartAt)
 	dt := req.StartAt/1000 - time.Now().Unix()
 	if req.StartAt <= 0 {
 		dt = 0
 	}
-	glog.Infof("Start sensor subscriber %v at now%+ds", c, dt)
+	glog.Infof("Start sensor subscriber %v at now%+dsecs", c, dt)
 
 	go func() {
-		defer req.Reply.Close()
+		defer req.Values.Close()
 		for m := range c {
 			glog.V(2).Infof("Sending to %v: %+v", c, m)
-			err := req.Reply.Send(m)
+			err := req.Values.Send(m)
 			if err != nil {
 				db.SensorUnsubscribe(c)
-				req.Reply.Close()
-				glog.Infof("Closed subscriber %v due to error: %s", c, err.Error())
+				glog.Infof("Closing subscriber %v due to error: %s", c, err.Error())
 				for _ = range c {
 					// drain the channel so the sender doesn't block
 				}
 				return
 			}
 		}
-		req.Reply.Close()
 		glog.Infof("Closed subscriber %v due to incoming EOF", c)
 		return
 	}()
-	return nil
+	return gears.Reply{Code: gears.CodeOK}
 }
 
-func HandleSensorDataRequest(req *gears.SensorDataRequest) error {
+func HandleSensorDataRequest(req *gears.SensorDataRequest) gears.Reply {
+	glog.Infof("Start sensor data push for %s", req.Name)
 	if req.Values == nil {
-		return fmt.Errorf("Sensor data request has nil values channel")
+		return gears.Reply{Code: gears.CodeClientError, Error: "Values channel is nil"}
 	}
 
-	glog.Infof("Start sensor data push for %s metric %s", req.Name, req.Metric)
+	// TODO: handle req.Info !!!
 
 	go func() {
 		for {
@@ -140,19 +121,22 @@ func HandleSensorDataRequest(req *gears.SensorDataRequest) error {
 			db.PutSensorValue(req.Name, m)
 		}
 	}()
-	return nil
+	return gears.Reply{Code: gears.CodeOK}
 }
 
-func HandleSensorReadRequest(req *gears.SensorReadRequest) error {
-	return nil
+func HandleSensorReadRequest(req *gears.SensorReadRequest) gears.Reply {
+	glog.Infof("Start sensor read of %s start=%d end=%d step=%d",
+		req.Name, req.StartAt/1000-time.Now().Unix(),
+		req.EndAt/1000-time.Now().Unix(), req.Step)
+	return gears.Reply{Code: gears.CodeServerError, Error: "Not yet implemented"}
 }
 
 // Params Requests
 
-func HandleParamPutRequest(req *gears.ParamPutRequest) error {
-	return nil
+func HandleParamPutRequest(req *gears.ParamPutRequest) gears.Reply {
+	return gears.Reply{Code: gears.CodeServerError, Error: "Not yet implemented"}
 }
 
-func HandleParamGetRequest(req *gears.ParamGetRequest) error {
-	return nil
+func HandleParamGetRequest(req *gears.ParamGetRequest) gears.Reply {
+	return gears.Reply{Code: gears.CodeServerError, Error: "Not yet implemented"}
 }

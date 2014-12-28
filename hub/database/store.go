@@ -15,11 +15,13 @@ import (
 )
 
 type DB struct {
-	ldb                   *leveldb.DB
-	path                  string
-	rfSubscriberMutex     sync.Mutex
-	rfSubscribers         []chan gears.RFMessage
-	rfSubscriberStart     []int64
+	ldb  *leveldb.DB
+	path string
+	// rfmessages can have a list of subscribers
+	rfSubscriberMutex sync.Mutex
+	rfSubscribers     []chan gears.RFMessage
+	rfSubscriberStart []int64
+	// each sensor can have a list of subscribers
 	sensorSubscriberMutex sync.Mutex
 	sensorSubscribers     map[string]*[]chan gears.SensorDataValue
 	sensorSubscriberStart map[string]*[]int64

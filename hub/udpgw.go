@@ -74,7 +74,7 @@ func (u *UDPGateway) sendPacket(group, node, flags byte, data []byte) {
 	buf[2] = node  // node id
 	copy(buf[3:], data)
 	// logging and sending
-	glog.Infof("Snd packet len=%d dst=%v node=%d", len(buf), addr, node)
+	glog.Infof("UDP Send RFg%03di%02d len=%d", group, node, len(buf))
 	glog.V(2).Infof("  Send: %+v", buf)
 	glog.V(4).Infof("  Pkt=%#v", buf)
 	u.sock.WriteToUDP(buf, addr)
@@ -211,7 +211,7 @@ func (u *UDPGateway) Receiver() {
 
 		// Special packet to log from UDP GW itself
 		case 9:
-			glog.Infof("UDP-GW: %s", string(data[3:]))
+			glog.Infof("UDP-GW %d: %s", groupId, string(data[3:]))
 			m := gears.RFMessage{
 				Group: groupId,
 				Node:  nodeId,
@@ -238,8 +238,8 @@ func (u *UDPGateway) Receiver() {
 			} else {
 				m.Data = data[3:]
 			}
-			glog.Infof("UDP Recv: src=%v %s len=%d", pktSrc, m.RfTag(), pktLen)
-			glog.V(4).Infof("  Pkt=%+v", m.Data[0:min(len(m.Data), 10)])
+			glog.Infof("UDP Recv: %s len=%d", m.RfTag(), pktLen)
+			glog.V(4).Infof("  src=%v Pkt=%+v", pktSrc, m.Data[0:min(len(m.Data), 10)])
 			// If an ACK is requested we should send that asap
 			if flags&1 != 0 {
 				u.sendPacket(groupId, nodeId, 0x6, []byte{})

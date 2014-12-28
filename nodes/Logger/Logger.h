@@ -24,9 +24,11 @@ private:
   log_config config, defaults;
   uint8_t buffer[LOG_MAX+1]; // +1 for null byte string termination
   uint8_t ix;
+  uint8_t missed;            // number of log messages that couldn't be sent
 
   void send(void);   // send accumulated buffer
   void init();
+  uint8_t* allocPkt(void);
 
 public:
   // constructor, uses default log initialization (serial + rf12b)

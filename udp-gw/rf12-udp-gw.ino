@@ -29,11 +29,11 @@
 //===== CUSTOMIZABLE CONFIGURATION =====
 
 #define LOG_UDP                 1       // log via UDP to hub router using debug messages
-#define LOG_SERIAL              1       // log on the serial port
+#define LOG_SERIAL              0       // log on the serial port
 
 #define DEBUG_UDP               0       // logs all UDP packets to serial
-#define DEBUG_RF                1       // logs all RF packets to serial
-#define DEBUG_IP                1       // logs DHCP/ARP/IP assignment to serial
+#define DEBUG_RF                0       // logs all RF packets to serial
+#define DEBUG_IP                0       // logs DHCP/ARP/IP assignment to serial
 #define DEBUG_NTP		1	// logs NTP info to logger
 
 #define LED_RED_PORT            4       // JeeNode port for red LED
@@ -61,17 +61,17 @@
 #elif BOARD == 2	// settings for basement udp-gw
 #define LED_RED_PORT            4       // JeeNode port for red LED
 #define LED_RCV_PORT            3       // JeeNode port for yellow/green LEDs
-#define RF12_GROUP           0xD4       // 0xD4 is JeeLabs' default group
+#define RF12_GROUP           0x02       // Group 2
 #define IP_ADDR		{ 192, 168, 0, 25 }
 #define MAC_ADDR	{ 0x74,0x69,0x69,0x2D,0x30,0x25 }
 #define NAME		"Basement"
 #elif BOARD == 3	// settings for 3rd udp-gw
-#define LED_RED_PORT            4       // JeeNode port for red LED
-#define LED_RCV_PORT            3       // JeeNode port for yellow/green LEDs
-#define RF12_GROUP           0x02       // Group 2
-#define IP_ADDR		{ 192, 168, 0, 26 }
-#define MAC_ADDR	{ 0x74,0x69,0x69,0x2D,0x30,0x26 }
-#define NAME		"Other"
+#define LED_RED_PORT            2       // JeeNode port for red LED
+#define LED_RCV_PORT            1       // JeeNode port for yellow/green LEDs
+#define RF12_GROUP           0xD4       // 0xD4 is JeeLabs' default group
+#define IP_ADDR		{ 192, 168, 0, 28 }
+#define MAC_ADDR	{ 0x74,0x69,0x69,0x2D,0x30,0x28 }
+#define NAME		"TestBench"
 #endif
 
 // my IP configuration
@@ -163,9 +163,11 @@ private:
   void send(void) {
     buffer[ix] = 0;
     // print to serial
+#if LOG_SERIAL
     Serial.print((char *)buffer);
     if (ix > 0 && buffer[ix-1] == '\n')
       Serial.print('\r');
+#endif
     // log to ethernet
     ethSend(buffer, ix);
 

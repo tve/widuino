@@ -10,6 +10,8 @@
 
 #define LCD    0    // support logging to the LCD (set to 0 to exclude that code)
 
+#define RETRY_MS    // for how many milliseconds to retry sending
+
 Logger::Logger(void) {
   init();
 #ifdef LOG_NORF12B
@@ -32,6 +34,19 @@ void Logger::init() {
   config.serial = true;
 }
 
+uint8_t *Logger::allocPkt() {
+  uint8_t *pkt = net.alloc();
+  // if we didn't get a buffer we retry for some time
+  if (!pkt) {
+    unsigned long t0 = millis();
+    while (!pkt && (millis()-t0) < 100) {
+      (void)net.poll();
+      pkt = net.alloc();
+    }
+  }
+  return pkt;
+}
+
 void Logger::send(void) {
   buffer[ix] = 0;
 
@@ -46,13 +61,29 @@ void Logger::send(void) {
 #ifndef LOG_NORF12B
   // Log to the network
   if (config.rf12) {
-    uint8_t *pkt = net.alloc();
-    //while (!pkt) { (void)net.poll(); pkt = net.alloc(); }
+    // if we missed messages then say so first
+    if (missed > 0) {
+      uint8_t *pkt = allocPkt();
+      if (pkt) {
+        *pkt = LOG_MODULE;
+	int l = sprintf((char *)(pkt+1), "Missed %d", missed);
+	net.send(l+1, true);
+        missed = 0;
+      } else {
+	if (missed < 255) missed++;
+	return;
+      }
+    }
+
+    // Now send the actual message we have
+    uint8_t *pkt = allocPkt();
     if (pkt) {
       *pkt = LOG_MODULE;
       memcpy(pkt+1, buffer, ix);
       net.send(ix+1, true); // +1 for module_id byte
+      missed = 0;
     } else {
+      if (missed < 255) missed++;
       //Serial.println(F("Log: out of rf12 buffers"));
     }
   }

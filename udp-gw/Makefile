@@ -1,10 +1,11 @@
 # Boards: 0=defaults, 1=antenna GW, 2=basement GW, 3=other GW
-CPPFLAGS = -DBOARD=2
+CPPFLAGS = -DBOARD=3
 
 all: rf12-udp-gw.hex udpgw
 
 HOST      = bbb
 SERIALDEV = net:$(HOST):2000
+#SERIALDEV = /dev/ttyUSB0
 include ./arduino.mk
 
 run: upload size

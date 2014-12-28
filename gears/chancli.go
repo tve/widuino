@@ -61,24 +61,56 @@ func (gc *GearConn) Close() {
 
 // ===== Request functions =====
 
-func (gc *GearConn) RFSubscribe(start int64) <-chan RFMessage {
+func (gc *GearConn) doRequest(req *Request) error {
 	replyRecv, replySend := libchan.Pipe()
-	c := make(chan RFMessage, 0)
+	req.Reply = replySend
 
-	req := struct{ RFS RFSubRequest }{
-		RFSubRequest{StartAt: start, Match: RFMessage{}, Reply: replySend},
-	}
-
+	// send the request
 	err := gc.mainChan.Send(req)
 	if err != nil {
+		replySend.Close()
+		return err
+	}
+
+	// wait for a reply
+	var r Reply
+	err = replyRecv.Receive(&r)
+	if err != nil {
+		return err
+	}
+	switch r.Code {
+	case CodeOK:
+		return nil
+	case CodeClientError:
+		return fmt.Errorf("client error: %s", r.Error)
+	case CodeServerError:
+		return fmt.Errorf("server error: %s", r.Error)
+	case CodeAckTimeout:
+		return AckTimeoutError
+	default:
+		return fmt.Errorf("unknown error type: %s", r.Error)
+	}
+}
+
+func (gc *GearConn) RFSubscribe(start int64) (<-chan RFMessage, error) {
+	subRecv, subSend := libchan.Pipe()
+	c := make(chan RFMessage, 0)
+
+	req := Request{
+		RFS: &RFSubRequest{StartAt: start, Match: RFMessage{}},
+	}
+
+	err := gc.doRequest(&req)
+	if err != nil {
+		subSend.Close()
 		close(c)
-		return c
+		return nil, err
 	}
 
 	go func() {
 		for {
 			var m RFMessage
-			err := replyRecv.Receive(&m)
+			err := subRecv.Receive(&m)
 			if err != nil {
 				log.Printf("Error receiving RF message: %s", err.Error())
 				close(c)
@@ -88,129 +120,84 @@ func (gc *GearConn) RFSubscribe(start int64) <-chan RFMessage {
 		}
 	}()
 
-	return c
+	return c, nil
 }
 
 func (gc *GearConn) RFSend(msg RFMessage) error {
-	var ackRecv libchan.Receiver
-	var ackSend libchan.Sender
-	if msg.DoAck {
-		ackRecv, ackSend = libchan.Pipe()
-	}
-
-	req := struct{ RF RFSendRequest }{
-		RFSendRequest{msg, ackSend},
-	}
-
-	err := gc.mainChan.Send(req)
-	if err != nil {
-		return err
-	}
-	if !msg.DoAck {
-		return nil
-	}
-
-	ack := AckReply{}
-	err = ackRecv.Receive(&ack)
-	if err != nil {
-		return err
-	}
-	if ack.Err != "" {
-		return fmt.Errorf("RFMessage send failed with %s", ack.Err)
-	}
-	return nil
+	req := Request{RF: (*RFSendRequest)(&msg)}
+	return gc.doRequest(&req)
 }
 
-func (gc *GearConn) SensorSubscribe(name string, startAt int64) <-chan SensorDataValue {
-	replyRecv, replySend := libchan.Pipe()
+func (gc *GearConn) SensorSubscribe(name string, startAt int64) (<-chan SensorDataValue, error) {
+	subRecv, subSend := libchan.Pipe()
 	c := make(chan SensorDataValue, 0)
 
-	req := struct{ SS SensorSubRequest }{
-		SensorSubRequest{name, startAt, replySend},
-	}
-
-	err := gc.mainChan.Send(req)
+	req := Request{SS: &SensorSubRequest{name, startAt, subSend}}
+	err := gc.doRequest(&req)
 	if err != nil {
+		subSend.Close()
 		close(c)
-		return c
-	}
-
-	go func() {
-		for {
-			var m SensorDataValue
-			err := replyRecv.Receive(&m)
-			if err != nil {
-				log.Printf("Error receiving SensorData message: %s", err.Error())
-				close(c)
-				return
-			}
-			c <- m
-		}
-	}()
-
-	return c
-}
-
-func (gc *GearConn) SensorRead(name string, startAt, endAt, step int64) <-chan SensorDataValue {
-	replyRecv, replySend := libchan.Pipe()
-	c := make(chan SensorDataValue, 0)
-
-	req := struct{ SR SensorReadRequest }{
-		SensorReadRequest{name, startAt, endAt, step, replySend},
-	}
-
-	err := gc.mainChan.Send(req)
-	if err != nil {
-		close(c)
-		return c
-	}
-
-	go func() {
-		for {
-			var m SensorDataValue
-			err := replyRecv.Receive(&m)
-			if err != nil {
-				log.Printf("Error receiving SensorData message: %s", err.Error())
-				close(c)
-				return
-			}
-			c <- m
-		}
-	}()
-
-	return c
-}
-
-func (gc *GearConn) DefineMetric(name, unit string, rate bool) error {
-	req := struct{ DM DefineMetricRequest }{
-		DefineMetricRequest{name, unit, rate},
-	}
-	return gc.mainChan.Send(req)
-}
-
-func (gc *GearConn) SensorSendData(name, metric string) (chan<- SensorDataValue, error) {
-	dataRecv, dataSend := libchan.Pipe()
-	ackRecv, ackSend := libchan.Pipe()
-
-	req := struct{ SD SensorDataRequest }{
-		SensorDataRequest{name, metric, dataRecv, ackSend},
-	}
-
-	err := gc.mainChan.Send(req)
-	if err != nil {
 		return nil, err
 	}
-	c := make(chan SensorDataValue, 10)
 
 	go func() {
 		for {
-			var ack AckReply
-			err := ackRecv.Receive(&ack)
+			var m SensorDataValue
+			err := subRecv.Receive(&m)
 			if err != nil {
+				log.Printf("Error receiving SensorData message: %s", err.Error())
+				close(c)
 				return
 			}
+			c <- m
 		}
 	}()
+
+	return c, nil
+}
+
+func (gc *GearConn) SensorRead(name string, startAt, endAt, step int64) (
+	<-chan SensorDataValue, error) {
+	valuesRecv, valuesSend := libchan.Pipe()
+	c := make(chan SensorDataValue, 0)
+
+	req := Request{
+		SR: &SensorReadRequest{name, startAt, endAt, step, valuesSend},
+	}
+	err := gc.doRequest(&req)
+	if err != nil {
+		valuesSend.Close()
+		close(c)
+		return nil, err
+	}
+
+	go func() {
+		for {
+			var m SensorDataValue
+			err := valuesRecv.Receive(&m)
+			if err != nil {
+				log.Printf("Error receiving SensorData message: %s", err.Error())
+				close(c)
+				return
+			}
+			c <- m
+		}
+	}()
+
+	return c, nil
+}
+
+func (gc *GearConn) SensorSendData(name string, si SensorInfo) (chan<- SensorDataValue, error) {
+	dataRecv, dataSend := libchan.Pipe()
+
+	req := Request{SD: &SensorDataRequest{name, si, dataRecv}}
+	err := gc.doRequest(&req)
+	if err != nil {
+		dataSend.Close()
+		return nil, err
+	}
+
+	c := make(chan SensorDataValue, 10)
 
 	go func() {
 		for sdv := range c {
@@ -242,25 +229,27 @@ func (gc *GearConn) pinger() {
 }
 
 func doEcho(sender libchan.Sender, timeout time.Duration) error {
-	const txt = "Hello world!"
+	txt := "Hello world!"
 	replyRecv, replySend := libchan.Pipe()
 
-	req := struct{ ER EchoRequest }{
-		EchoRequest{Text: txt, Reply: replySend},
-	}
+	req := Request{ER: (*EchoRequest)(&txt), Reply: replySend}
 
 	err := sender.Send(req)
 	if err != nil {
+		replySend.Close()
 		return err
 	}
 
-	reply := &EchoReply{}
-	err = replyRecv.Receive(reply)
+	var reply Reply
+	err = replyRecv.Receive(&reply)
 	if err != nil {
 		return err
 	}
-	if reply.Text != txt {
-		return fmt.Errorf("echo returned bad message: '%s'", reply.Text)
+	if reply.Code != CodeOK {
+		return fmt.Errorf("%s", reply.Error)
+	}
+	if string(*reply.ER) != txt {
+		return fmt.Errorf("echo returned bad message: '%s'", reply.ER)
 	}
 	return nil
 }
