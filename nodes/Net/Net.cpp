@@ -36,7 +36,7 @@
 #define SPS_DATA   3 // got length, reading data
 
 // Packet buffers and retries
-#define NET_RETRY_MS 100
+#define NET_RETRY_MS  50
 #define NET_RETRY_MAX  8
 
 // Method for getting RSSI of received packets, this works well by connecting the appropriate
@@ -46,7 +46,26 @@
 
 uint8_t node_id;         // this node's rf12 ID
 
-#define DEBUG 1
+#define TRACE 0
+//#define TRACE 40
+#if TRACE
+uint8_t trace_buf[TRACE+1];
+uint8_t trace_cnt = 0;
+void trace(char c) {
+	if (trace_cnt < TRACE) trace_buf[1 + trace_cnt++] = c;
+	if (trace_cnt >= TRACE/2) {
+		if (rf12_canSend()) {
+		  trace_buf[0] = LOG_MODULE;
+		  rf12_sendStart(node_id, trace_buf, trace_cnt+1);
+		  trace_cnt = 0;
+		}
+	}
+}
+#else
+void trace(char c) {}
+#endif
+
+#define DEBUG 0
 
 // EEPROM configuration data
 typedef struct {
@@ -74,6 +93,7 @@ void Net::doSend(void) {
     // send as broadcast packet without ACK
 #ifdef NET_RF12B
     rf12_sendStart(hdr, &buf[0].data, buf[0].len);
+    trace('S');
 #else
 #ifdef NET_SERIAL
 #endif
@@ -98,6 +118,7 @@ void Net::doSend(void) {
       sendCnt++;
       sendTime = millis();
     }
+    trace('0'+bufCnt);
   }
 #endif
 }
@@ -119,10 +140,12 @@ void Net::rawSend(uint8_t len, uint8_t hdr) {
   buf[bufCnt].hdr = hdr;
   bufCnt++;
   // if there was no packet queued just go ahead and send the new one
+  trace('>');
   if (bufCnt == 1) {
     if (rf12_canSend()) {
       doSend();
     } else {
+      trace('-');
       //Serial.println(F("Cannot send"));
     }
   }
@@ -191,6 +214,8 @@ uint8_t Net::poll(void) {
       // (can't immediately send 'cause we need the buffer)
       getRssi();
       if (rf12_hdr & RF12_HDR_ACK) queueAck(rf12_hdr & RF12_HDR_MASK);
+      trace('R');
+      trace('0'+bufCnt);
       return rf12_data[0];
     } else if (!(rf12_hdr & RF12_HDR_ACK)) {
       // Ack packet, check that it's for us and that we're waiting for an ACK
@@ -204,10 +229,15 @@ uint8_t Net::poll(void) {
         }
         bufCnt--;
         sendCnt=0;
+        trace('A');
+        trace('0'+bufCnt);
+      } else {
+        trace('a');
+        trace('0'+bufCnt);
       }
     }
   } else if (rcv && rf12_crc != 0) {
-    Serial.println("RF12 bad CRC");
+    //Serial.println("RF12 bad CRC");
   }
 
   reXmit();
@@ -235,6 +265,8 @@ void Net::reXmit(void) {
       //Serial.print(" 0x");
       //Serial.print(buf[0].data[0], 16);
       //Serial.println((char *)(buf[0].data+1));
+      trace('X');
+      trace('0'+bufCnt);
       doSend();
     }
 
@@ -259,6 +291,7 @@ Net::Net(uint8_t c_node_id, uint8_t group_id) {
 
   moduleId = NET_MODULE;
   configSize = sizeof(net_config);
+  bufCnt = 0;
 }
 
 // ===== Configuration =====
@@ -312,6 +345,7 @@ void Net::initRadio(uint8_t radio_mode) {
   default:
     Serial.println();
   }
+  trace('+');
 
   //Serial.println("  rf12 initialized");
   // if we're collecting RSSIs then init the analog pin

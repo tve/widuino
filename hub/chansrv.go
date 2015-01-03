@@ -109,7 +109,7 @@ func handleRequest(receiver libchan.Receiver) error {
 		// want to close the connection (maybe we should for CodeServerError)
 		// but we can also leave that decision up to the client and thereby
 		// avoid killing pipelined incoming requests
-		glog.Infof("Request handler error: %s", err.Error())
+		glog.Infof("Request handler error: %s", rep.Error)
 	}
 	return nil
 }

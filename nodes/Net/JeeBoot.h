@@ -15,4 +15,9 @@ extern void jb_upgrade(bool force=false);
 
 extern void jb_init3(void);
 
+inline void jb_force(void) { *(uint32_t*)0x100 = 0x0badf00d; }
+
+extern uint16_t jb_free_ram(void);
+
+
 #endif /*JEEBOOT_H*/

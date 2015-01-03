@@ -97,7 +97,7 @@ func (gc *GearConn) RFSubscribe(start int64) (<-chan RFMessage, error) {
 	c := make(chan RFMessage, 0)
 
 	req := Request{
-		RFS: &RFSubRequest{StartAt: start, Match: RFMessage{}},
+		RFS: &RFSubRequest{StartAt: start, Match: RFMessage{}, Messages: subSend},
 	}
 
 	err := gc.doRequest(&req)

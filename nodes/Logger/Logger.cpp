@@ -10,7 +10,7 @@
 
 #define LCD    0    // support logging to the LCD (set to 0 to exclude that code)
 
-#define RETRY_MS    // for how many milliseconds to retry sending
+#define RETRY_MS 300   // for how many milliseconds to retry sending
 
 Logger::Logger(void) {
   init();
@@ -39,7 +39,8 @@ uint8_t *Logger::allocPkt() {
   // if we didn't get a buffer we retry for some time
   if (!pkt) {
     unsigned long t0 = millis();
-    while (!pkt && (millis()-t0) < 100) {
+    while (!pkt && (millis()-t0) < RETRY_MS) {
+      delay(1);
       (void)net.poll();
       pkt = net.alloc();
     }
@@ -64,13 +65,17 @@ void Logger::send(void) {
     // if we missed messages then say so first
     if (missed > 0) {
       uint8_t *pkt = allocPkt();
+      uint8_t *pkt0 = pkt;
       if (pkt) {
-        *pkt = LOG_MODULE;
-	int l = sprintf((char *)(pkt+1), "Missed %d", missed);
-	net.send(l+1, true);
+        *pkt++ = LOG_MODULE;
+	memcpy(pkt, "<lost ", 6); pkt += 6;
+	if (missed > 10) *pkt++ = '0' + missed/10;
+	*pkt++ = '0' + (missed%10);
+	memcpy(pkt, " lines>", 7); pkt += 7;
+	net.send(pkt-pkt0, true);
         missed = 0;
       } else {
-	if (missed < 255) missed++;
+	if (missed < 99) missed++;
 	return;
       }
     }

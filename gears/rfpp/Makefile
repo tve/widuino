@@ -2,7 +2,7 @@
 NAME=rfpp
 
 build: $(NAME)
-$(NAME): *.go
+$(NAME): *.go ../*.go
 	go build -o $(NAME)
 
 verbosetest: $(NAME)

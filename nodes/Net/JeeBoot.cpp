@@ -29,3 +29,15 @@ void jb_init3(void) {
   jb_group_id = *(byte *)0x100;
   jb_node_id  = *(byte *)0x101;
 }
+
+// Calculate free memory
+extern char *__bss_end; // end of statically allocated memory
+extern char *__brkval;  // highest point used by dynamic allocated heap
+uint16_t jb_free_ram(void) {
+  uint16_t freeValue;
+  if((uint16_t)__brkval == 0)
+    return ((uint16_t)&freeValue) - ((uint16_t)&__bss_end);
+  else
+    return ((uint16_t)&freeValue) - ((uint16_t)__brkval);
+}
+
