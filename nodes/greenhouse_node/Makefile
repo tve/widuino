@@ -1,5 +1,6 @@
 LIBRARYPATH = $(ARDUINODIR)/libraries ..
-LIBRARIES = JeeLib Net EEConf Logger NTPTime OwTemp OwScan OneWire Servo Time
+LIBRARIES = JeeLib Net2 Logger2 OwTemp2 OwScan2 OneWire Servo NTPTime Time
+LINKFLAGS = -Wl,-Map=$(TARGET).map,--cref -Wl,--section-start,.data=0x800104
 SERIALDEV=net:bbb:2001
 include ../arduino.mk
 

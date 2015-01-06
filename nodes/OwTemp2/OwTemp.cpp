@@ -4,21 +4,36 @@
 #include <OneWire.h>
 #include <Logger.h>
 
-#define OWTEMP_CONVTIME 188 // milliseconds for a conversion (10 bits)
-#define TEMP_OFFSET      88 // offset used to store min/max in 8 bits
+#define OWTEMP_CONVTIME 188   // milliseconds for a conversion (10 bits) (chg readRaw too)
+#define TEMP_OFFSET      88   // offset used to store min/max in 8 bits
 
-#define MAX_COUNT        32 // max number of sensors, limited due to bitfield ops
+#define MAX_COUNT        32   // max number of sensors, limited due to bitfield ops
 
 #define DEBUG 0
 
+#define SCOPE_TRIGGER    0
+#define SCOPE_TRIGGER   15  // pin to pull low to trigger oscilloscope for debugging
+#if SCOPE_TRIGGER > 0
+#define SCOPE_INIT do pinMode(SCOPE_TRIGGER, OUTPUT); while(false)
+#define SCOPE_LOW do digitalWrite(SCOPE_TRIGGER, LOW); while(false)
+#define SCOPE_HIGH do digitalWrite(SCOPE_TRIGGER, HIGH); while(false)
+#else
+#define SCOPE_INIT
+#define SCOPE_LOW
+#define SCOPE_HIGH
+#endif
+
 // ===== Constructors =====
 
-OwTemp::OwTemp(uint8_t pin, uint64_t *addr, uint8_t max) {
-  init(pin, addr, max);
+OwTemp::OwTemp(uint8_t pin, uint64_t *addr, uint8_t max, uint8_t pup_pin) {
+  init(pin, addr, max, pup_pin);
+  SCOPE_INIT;
 }
 
-void OwTemp::init(uint8_t pin, uint64_t *addr, uint8_t max) {
+void OwTemp::init(uint8_t pin, uint64_t *addr, uint8_t max, uint8_t pup_pin) {
   ds = new OneWire(pin);
+  pupPin = pup_pin;
+  if (pupPin > 0) pinMode(pupPin, INPUT); // turn pull-up off
   tempAddr = addr;
   tempMax = max < MAX_COUNT ? max : MAX_COUNT;
   convState = 0;
@@ -69,9 +84,15 @@ bool OwTemp::loop(uint8_t secs) {
     }
     // start a conversion
     if (n_found > 0) {
-            start();
-            lastConv = now;
-            convState = 1;
+      start();
+      lastConv = now;
+      convState = 1;
+#if DEBUG
+      logger->print("OWT: start "); logger->println(lastConv);
+#endif
+    } else {
+      lastConv = now;
+      return 1;
     }
 
   } else if (convState == 1 && now - lastConv > OWTEMP_CONVTIME) {
@@ -188,6 +209,7 @@ void OwTemp::printDebug(Print *printer) {
 void OwTemp::setresolution(uint64_t addr, byte bits) {
   addr = reverse_ow_addr(&addr);
   // write scratchpad
+  if (pupPin > 0) pinMode(pupPin, INPUT);
   ds->reset();
   ds->select((uint8_t *)&addr);
   ds->write(0x4E, 0);
@@ -204,19 +226,27 @@ void OwTemp::setresolution(uint64_t addr, byte bits) {
 
 // Start temperature conversion
 void OwTemp::start() {
+  if (pupPin > 0) {
+    pinMode(pupPin, INPUT);
+    digitalWrite(pupPin, HIGH);
+  }
   ds->reset();
   ds->skip();
+  SCOPE_LOW;
   ds->write(0x44, 1);         // start conversion, with parasite power on at the end
+  if (pupPin > 0) pinMode(pupPin, OUTPUT);
 }
 
 // Raw reading of temperature, returns INT16_MIN on failure
 int16_t OwTemp::rawRead(uint64_t addr) {
   uint64_t rev_addr = reverse_ow_addr(&addr);
   byte data[12];
+  if (pupPin > 0) pinMode(pupPin, INPUT);
   ds->reset();
   ds->select((uint8_t *)&rev_addr);
   ds->write(0xBE);         // Read Scratchpad
 
+  SCOPE_HIGH;
   for (byte i = 0; i < 9; i++) {           // we need 9 bytes
     data[i] = ds->read();
   }
@@ -231,8 +261,19 @@ int16_t OwTemp::rawRead(uint64_t addr) {
     return INT16_MIN;
   }
 
-  // handle missing sensor and double-check data
-  if ((data[0] == 0 && data[1] == 0) || data[5] != 0xFF || data[7] != 0x10) {
+  // fix sensors that are not set to 10-bit conversion
+  if (data[4] != 0x3F) {
+    setresolution(addr, 10);
+#if 1
+    logger->print(F("OWT: Setting "));
+    print_ow_addr(logger, addr);
+    logger->println(F(" to 10-bits"));
+#endif
+    return INT16_MIN;
+  }
+
+  // handle missing sensor and double-check data (0x0550 is power-on value)
+  if ((data[0] == 0x50 && data[1] == 0x05) || data[5] != 0xFF || data[7] != 0x10) {
 #if DEBUG
     logger->print(F("OWT: Bad data for "));
     print_ow_addr(logger, addr);
@@ -266,7 +307,7 @@ float OwTemp::read(uint8_t s) {
   if (raw == INT16_MIN) raw = rawRead(addr);
   if (raw == INT16_MIN) raw = rawRead(addr);
   if (raw == INT16_MIN) raw = rawRead(addr);
-  if (raw == INT16_MIN || raw == 0x0550) return NAN; // 0x0550 is power-on value
+  if (raw == INT16_MIN) return NAN;
 
   float celsius = (float)raw / 16.0;
   float fahrenheit = celsius * 1.8 + 32.0;

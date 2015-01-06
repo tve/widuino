@@ -17,16 +17,10 @@
 #define MAX_TEMP      20
 #define TEMP_PERIOD   10    // how frequently to read sensors (in seconds)
 #define MAX_RELAY      5
-#define RELAY_PERIOD 120    // how frequently to read relays (in seconds)
+#define RELAY_PERIOD  12    // how frequently to read relays (in seconds)
 
-
-Net net(29);  // use node_id=29 by default, which is going to raise red flags...
-NTPTime ntptime;
-Logger l, *logger=&l;
-static Configured *(node_config[]) = {
-  &net, logger, &ntptime, 0
-};
-
+Net net;
+Logger l(LOG_RF12), *logger=&l;
 MilliTimer notSet, toggle, debugTimer;
 
 // Relays
@@ -44,31 +38,19 @@ char temp_name[MAX_TEMP][10] = {
   "panel", "htr in", "bdrm top", "livg top",
   "guest bot", "fauc cold", "fauc hot", "livg bot",
   "cold in", "fauc ret", "fauc out", "fauc c in",
-  "guest top", "bdrm top",
+  "guest top", "bdrm top", "htr hot", "mix in",
+  "htr cold", "htr bot", "htr top", "new20",
 };
-// DS18B20 8E9331010000 : living zone top
-// DS18B20 DE9731010000 : guest zone bot
-// DS18B20 459931010000 : living zone bot
-// DS18B20 1D9331010000 : water heater out  ! Missing
-// DS18B20 179E31010000 : guest zone top
-// DS18B20 9C9C31010000 : water heater in
-// DS18B20 7AA131010000 : bedrm zone top
-// DS18B20 9F8F31010000 : bedrm zone bot
-// DS18B20 D09131010000 : wood surface
-// DS18B20 218D31010000 : faucet mix cold
-// DS18B20 A99931010000 : faucet mix hot
-// DS18B20 D58731010000 : cold in
-// DS18B20 5BA231010000 : faucet return
-// DS18B20 5B9331010000 : faucet mix out
-// DS18B20 FBA431010000 : faucet cold in
 // DS18B20 7F8931010000 : water heater internal  ! Missing
 uint64_t temp_addr[MAX_TEMP] = {
   0x28D09131010000CC, 0x289C9C3101000028, 0x287AA131010000DB, 0x288E933101000072,
   0x28DE973101000043, 0x28218D31010000D4, 0x28A99931010000FC, 0x28459931010000A8,
   0x28D58731010000C7, 0x285BA23101000014, 0x285B93310100005D, 0x28FBA431010000D4,
-  0x28179E31010000B9, 0x289F8F3101000043,
+  0x28179E31010000B9, 0x289F8F3101000043, 0x28F5A431010000C7, 0x280A97310100005B,
+  0x2862A331010000A2, 0x285282310100007A, 0x28DF94310100003A,
 };
-OwTemp owTemp(OWT_PORT+3, temp_addr, MAX_TEMP);
+// DQ is on port3 D and we add a second port as pull-up on port4 A
+OwTemp owTemp(OWT_PORT+3, temp_addr, MAX_TEMP, OWT_PORT+13);
 
 void dumpMem(uint8_t *start) {
   for (uint8_t *a=start; a<start+0x200; a+=16) {
@@ -99,11 +81,7 @@ void setup() {
   wdt_enable(WDTO_8S);
   jb_force();
   Serial.begin(57600);
-  Serial.println(F("***** SETUP: " __FILE__));
-
-  //eeprom_write_word((uint16_t *)0x20, 0xF00D);
-
-  eeconf_init(node_config);
+  net.init(29);  // use node_id=29 by default, which is going to raise red flags...
   logger->println(F("***** SETUP: " __FILE__));
 
   logger->println(F("Scanning temps"));
@@ -114,7 +92,8 @@ void setup() {
   ow_scan(OWR_PORT+3, relay_addr, MAX_RELAY, logger);
   wdt_reset();
 
-  debugTimer.set(60000);
+  debugTimer.set(30000);
+  toggle.set(2000);
 
   logger->print("Free RAM: "); logger->println(jb_free_ram());
   logger->println(F("***** RUNNING: " __FILE__));
@@ -123,7 +102,12 @@ void setup() {
 int cnt = 0;
 void loop() {
   wdt_reset();
-  if (net.flush()) eeconf_dispatch();
+  while (net.flush()) {
+    //uint8_t m = (uint8_t)rf12_data[0];
+    handleNTPTime(rf12_data, rf12_len);
+    //logger->print("RECV ");
+    //logger->println(m);
+  }
 
   if (debugTimer.poll()) {
       logger->println(F("Resetting..."));
@@ -134,46 +118,65 @@ void loop() {
 
   if (owTemp.loop(TEMP_PERIOD)) {
     logger->print("Free RAM: "); logger->println(jb_free_ram());
+    logger->print(debugTimer.remaining()/1000);
+    logger->println("s to reboot");
+
     logger->print("Time: ");
-    logger->print(hour());
-    logger->print(':');
-    logger->print(minute());
+    printNTPTime(logger);
     logger->println();
 
     logger->println("Temp sensors: ");
-    for (byte i=0; i<MAX_TEMP; i++) {
+    byte i=0;
+    for (; i<MAX_TEMP; i++) {
       if (!owTemp.isTemp(i)) continue;
       if (i < 10) logger->print(' ');
       logger->print(i);
-      logger->print('=');
+      logger->print(": ");
       float t = owTemp.get(i);
       if (t < 100.0) logger->print(' ');
       logger->print(t);
       logger->print("F ");
-      logger->println(temp_name[i]);
+      logger->print(temp_name[i]);
+      for (byte j=0; j<12-strlen(temp_name[i]); j++) logger->print(' ');
+      if (i%2==1) logger->println();
     }
+    if (i%2==0) logger->println();
     //wdt_reset();
     //if (cnt % 10 == 0) owTemp.printDebug(logger);
-
-    logger->println("Relays: ");
-    for (byte i=0; i<MAX_RELAY; i++) {
-      if (!owRelay.isRelay(i)) continue;
-      logger->print(i);
-      logger->print('=');
-      logger->print(owRelay.get(i));
-      logger->print(' ');
-      logger->println(relay_name[i]);
-    }
 
     if (++cnt >= 20) {
       logger->println(F("Resetting..."));
       delay(500);
       jb_upgrade(true);
     }
+
   }
 
+  /*
   if (owRelay.loop(RELAY_PERIOD)) {
+    logger->print("Relays:");
+    for (byte i=0; i<MAX_RELAY; i++) {
+      if (!owRelay.isRelay(i)) continue;
+      logger->print(' ');
+      logger->print(i);
+      logger->print('=');
+      logger->print(owRelay.get(i));
+      logger->print(' ');
+      logger->print(relay_name[i]);
+    }
+    logger->println();
+
+    for (uint8_t r=0; r<MAX_RELAY; r++) {
+      if (owRelay.isRelay(r)) {
+        bool ok = owRelay.set(r, 1);
+        if (!ok) {
+          logger->print(F("Failed to toggle "));
+          logger->println(r);
+        }
+      }
+    }
   }
+  */
 
   // If we don't know the time of day complain about it
   if (timeStatus() != timeSet) {

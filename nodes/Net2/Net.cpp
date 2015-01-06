@@ -21,8 +21,8 @@
 
 #include <JeeLib.h>
 #include <JeeBoot.h>
+#include <Logger.h>
 #include <alloca.h>
-#include <EEConf.h>
 #include <Net.h>
 
 #ifdef NET_SERIAL
@@ -292,84 +292,57 @@ void Net::reXmit(void) {
 }
 
 // Constructor
-Net::Net(uint8_t c_node_id, uint8_t group_id) {
+Net::Net() {
+  bufCnt = 0;
+}
+
+void Net::init(uint8_t c_node_id, uint8_t radio_mode, uint8_t c_group_id) {
 #ifdef NET_NOJEEBOOT
-  this->group_id = group_id;
+  group_id = c_group_id;
   node_id = c_node_id;
 #else
   if (jb_group_id != 0 && jb_node_id > 0 && jb_node_id < 31) {
-    this->group_id = jb_group_id;
+    group_id = jb_group_id;
     node_id = jb_node_id;
   } else {
-    this->group_id = group_id;
+    group_id = c_group_id;
     node_id = c_node_id;
   }
 #endif
 
-  moduleId = NET_MODULE;
-  configSize = sizeof(net_config);
-  bufCnt = 0;
-}
-
-// ===== Configuration =====
-
-void Net::receive(volatile uint8_t *pkt, uint8_t len) {
-#ifndef NET_NONE
-  // TODO: accept packets to change mode
-#endif
-}
-
-// ApplyConfig() not just processes the EEPROM config but also initializes the RF12 module
-void Net::applyConfig(uint8_t *cf) {
-  net_config *eeprom = (net_config *)cf;
-
-  // do we have data from EEPROM or not?
-  if (eeprom) {
-    Serial.print(F("Config: ")); Serial.println(eeprom->radio_mode);
-  } else {
-    eeprom = (net_config *)alloca(sizeof(net_config));
-    // we need to punch-in some default values
-    eeprom->radio_mode = NET_MODE_NORMAL;
-    eeconf_write(NET_MODULE, eeprom);
-  }
-  initRadio(eeprom->radio_mode);
-}
-
-void Net::initRadio(uint8_t radio_mode) {
 #ifdef NET_NONE
-  Serial.println(F("Config Net: RF12B disabled"));
+  logger->println(F("Config Net: RF12B disabled"));
   return;
-#else
+#endif
+
   // initialize rf12 module
-  Serial.print(F("Config Net: node_id="));
-  Serial.print(node_id);
-  Serial.print(F(" group_id="));
-  Serial.print(group_id);
-  Serial.print(F(" mode="));
-  Serial.print(radio_mode);
   rf12_initialize(node_id, RF12_915MHZ, group_id, 1600);
-  //rf12_initialize(node_id, RF12_915MHZ, group_id);
+  logger->print(F("Net: node_id="));
+  logger->print(node_id);
+  logger->print(F(" group_id="));
+  logger->print(group_id);
+  logger->print(F(" mode="));
+  logger->print(radio_mode);
+
   switch (radio_mode) {
   case NET_MODE_LOW:
-    Serial.println(F("  low TX power"));
     rf12_control(0x9857); // reduce tx power
     rf12_control(0x94B2); // attenuate receiver 0x94B2 or 0x94Ba
+    logger->println(F("  low TX power"));
     break;
   case NET_MODE_SLOW:
-    Serial.println(F("  19kbps"));
     rf12_control(0xC611); // 19.1kbps
     rf12_control(0x94C1); // VDI:fast,-97dBm,67khz
     rf12_control(0x9820); // 45khz
+    logger->println(F("  19kbps"));
   default:
-    Serial.println();
+    logger->println();
   }
   trace('+');
 
-  //Serial.println("  rf12 initialized");
   // if we're collecting RSSIs then init the analog pin
 #ifdef RSSI_PIN
   analogReference(INTERNAL);
   pinMode(RSSI_PIN, INPUT);
-#endif
 #endif
 }

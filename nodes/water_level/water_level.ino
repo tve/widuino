@@ -7,11 +7,12 @@
 // with a gain of ~300x for depths of ~36 inches and ~100x for depths of ~8 ft.
 
 #include <Widuino.h>
+#include <NTPTime.h>
+#include <Time.h>
 #include <OwScan.h>
 #include <OwTemp.h>
 #include <avr/wdt.h>
 
-#define MAX_DEV      4
 #define MAX_TEMP     4
 #define PERIOD      10      // how frequently to read sensors (in seconds)
 // #define PERIOD     60      // how frequently to read sensors (in seconds)
@@ -23,70 +24,80 @@
 #define WATER_OW     7      // port4 D
 #define POWER_RELAY  4      // port1 D
 
-OwScan owScan(WATER_OW, MAX_DEV);
-OwTemp owTemp(&owScan, MAX_TEMP);
-byte numTemp;
+// Temperature sensor names and addresses
+char temp_name[MAX_TEMP][6] = { "upper", "lower" };
+// DS18B20 8E9331010000 : living zone top
+// DS18B20 DE9731010000 : guest zone bot
+uint64_t temp_addr[MAX_TEMP] = {
+};
+OwTemp owTemp(WATER_OW, temp_addr, MAX_TEMP);
 
 // Standard module config and dispatch set-up
-Net net(29); // use node_id=29 by default, which is going to raise red flags...
-Logger l, *logger=&l;
-static Configured *(node_config[]) = {
-  &net, logger, &owScan, 0
-};
+Net net; // use node_id=29 by default, which is going to raise red flags...
+Logger l(LOG_RF12), *logger=&l;
 
 //===== setup & loop =====
 
 void setup() {
-  delay(100);
+  wdt_enable(WDTO_8S);
+  jb_force();
   Serial.begin(57600);
-  delay(100);
-  Serial.println(F("***** SETUP: " __FILE__));
-  eeconf_init(node_config);
+  net.init(29);  // use node_id=29 by default, which is going to raise red flags...
+  logger->println(F("***** SETUP: " __FILE__));
 
+  // turn LEDs on for half a second
   digitalWrite(STATUS_LED, HIGH);
   digitalWrite(WATER_LED, HIGH);
   pinMode(STATUS_LED, OUTPUT);
   pinMode(WATER_LED, OUTPUT);
-  delay(200);
+  delay(500);
   digitalWrite(STATUS_LED, LOW);
   digitalWrite(WATER_LED, LOW);
 
+  // configure analog water pressure sensor ADCs
   pinMode(WATER1, INPUT);
   pinMode(WATER2, INPUT);
   analogReference(DEFAULT);
 
+  // turn off pump relay
   digitalWrite(POWER_RELAY, LOW);
   pinMode(POWER_RELAY, OUTPUT);
 
-  numTemp = owScan.scan(logger);
+  logger->println(F("Scanning temps"));
+  ow_scan(WATER_OW, temp_addr, MAX_TEMP, logger);
+
+  logger->print("Free RAM: "); logger->println(jb_free_ram());
   logger->println(F("***** RUNNING: " __FILE__));
-  wdt_enable(WDTO_4S);
 }
 
 int times = 0;
 
 int readWater(uint8_t analogPin, uint8_t ledPin) {
-    uint8_t n = 8;
-    int raw = 0;
-    while (n-- > 0) raw += analogRead(analogPin);
-    raw = (raw + 4) >> 3;
-    logger->print("Water #");
-    logger->print(analogPin);
-    logger->print(" = ");
-    logger->print(raw);
-    logger->print(" = ");
-    logger->print((float)raw * 3.3 / 1024);
-    logger->println("V");
+  uint8_t n = 8;
+  int raw = 0;
+  while (n-- > 0) raw += analogRead(analogPin);
+  raw = (raw + 4) >> 3;
+  logger->print("Water #");
+  logger->print(analogPin);
+  logger->print(" = ");
+  logger->print(raw);
+  logger->print(" = ");
+  logger->print((float)raw * 3.3 / 1024);
+  logger->println("V");
 
-    // set the water level led if the level is above a few inches
-    if (raw > 300) digitalWrite(ledPin, HIGH);
+  // set the water level led if the level is above a few inches
+  if (raw > 300) digitalWrite(ledPin, HIGH);
 
-    return raw;
+  return raw;
+}
+
+void dispatch() {
+  handleNTPTime(rf12_data, rf12_len);
 }
 
 void loop() {
   wdt_reset();
-  while (net.flush()) eeconf_dispatch();
+  while (net.flush()) dispatch();
 
   if (owTemp.loop(PERIOD)) {
     digitalWrite(STATUS_LED, HIGH);
@@ -94,7 +105,8 @@ void loop() {
     byte data[MAX_TEMP];
     byte *d = data;
 
-    for (byte i=0; i<numTemp; i++) {
+    for (byte i=0; i<MAX_TEMP; i++) {
+      if (!owTemp.isTemp(i)) continue;
       float t = owTemp.get(i);
       *d++ = (int8_t)(t+0.5);
       logger->print("Temp ");
@@ -106,7 +118,7 @@ void loop() {
     // send a packet with the temperature data
     byte *pkt;
     while ((pkt = net.alloc()) == 0) {
-      if (net.poll()) eeconf_dispatch();
+      if (net.poll()) dispatch();
     }
     pkt[0] = OWTEMP_MODULE;
     memcpy(pkt+1, data, d-data);
@@ -119,7 +131,7 @@ void loop() {
 
     // send a packet with the water level data
     while ((pkt = net.alloc()) == 0) {
-      if (net.poll()) eeconf_dispatch();
+      if (net.poll()) dispatch();
     }
     pkt[0] = WATERLEVEL_MODULE;
     memcpy(pkt+1, &raw1, sizeof(raw1));
@@ -128,8 +140,18 @@ void loop() {
 
     digitalWrite(STATUS_LED, LOW);
 
+    logger->print("Time: ");
+    printNTPTime(logger);
+    logger->println();
+
     times++;
-    if (times > 4) jb_upgrade(true);
+    if (times > 4) {
+      logger->println(F("Resetting..."));
+      net.flush();
+      delay(100);
+      jb_upgrade(true);
+    }
+
     //digitalWrite(POWER_RELAY, (times++)&1);
   }
 }

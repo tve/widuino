@@ -3,34 +3,36 @@
 // Network Time class
 
 #include <JeeLib.h>
-#include <EEConf.h>
-#include <Net.h>
 #include <Time.h>
 #include <Logger.h>
+#include <Modules.h>
 #include <NTPTime.h>
 
-// constructor
-NTPTime::NTPTime(void) {
-  offset = 0; // UTC default
-  moduleId = NTPTIME_MODULE;
-  configSize = sizeof(ntptime_config);
-}
-
-// ===== Configuration =====
-
-// Receive a time packet with UTC time
-void NTPTime::receive(volatile uint8_t *pkt, uint8_t len) {
+void handleNTPTime(volatile uint8_t *pkt, uint8_t len) {
+  if (pkt[0] != NTPTIME_MODULE) return;
   if (len >= 4) {
     bool wasSet = timeStatus();
-    setTime(*(uint32_t *)pkt);
-    if (!wasSet) logger->println(F("Time initialized"));
+    setTime(*(uint32_t *)(pkt+1));
+    if (!wasSet) logger->println(F("NTP time initialized"));
   }
 }
 
-void NTPTime::applyConfig(uint8_t *cf) {
-  if (cf)
-    offset = ((ntptime_config *)cf)->offset;
-  else
-    eeconf_write(NTPTIME_MODULE, &offset);
-	Serial.println("NTPTime configured");
+static void print2(Print *p, uint8_t v, char fill='0') {
+		if (v < 10) p->print(fill);
+		p->print(v);
+}
+
+void printNTPTime(Print *p, time_t t=0) {
+  if (!timeStatus()) {
+    p->print(F("????/??/?? ??:?? UTC"));
+	return;
+  }
+  if (t == 0) t = now();
+  p->print(year(t));     p->print('/');
+  print2(p, month(t));   p->print('/');
+  print2(p, day(t));     p->print(' ');
+  print2(p, hour(t));    p->print(':');
+  print2(p, minute(t));  p->print(':');
+  print2(p, second());
+  p->print(" UTC");
 }

@@ -21,7 +21,7 @@ uint32_t ow_scan(byte pin, uint64_t *devices, uint8_t max, Print *printer) {
 
   // tally which devices we expect from non-zero addresses in the array
   for (byte i=0; i<max; i++) {
-    if (devices[i] != 0) expected |= 1<<i;
+    if (devices[i] != 0) expected |= (uint32_t)1 << i;
   }
   byte n_expected = count_bits(expected);
 
@@ -39,7 +39,9 @@ uint32_t ow_scan(byte pin, uint64_t *devices, uint8_t max, Print *printer) {
       if (rev_addr == devices[s]) {
         if (printer) {
           printPrefix(printer, pin);
-          printer->print(F(" found "));
+          printer->print(F(" found #"));
+          printer->print(s);
+          printer->print(": ");
           print_ow_addr(printer, addr);
           printer->println();
         }
@@ -54,7 +56,9 @@ uint32_t ow_scan(byte pin, uint64_t *devices, uint8_t max, Print *printer) {
         devices[s] = rev_addr;
         if (printer) {
           printPrefix(printer, pin);
-          printer->print(F(" new "));
+          printer->print(F(" new #"));
+          printer->print(s);
+          printer->print(": ");
           print_ow_addr(printer, addr);
           printer->println();
         }
@@ -75,9 +79,10 @@ uint32_t ow_scan(byte pin, uint64_t *devices, uint8_t max, Print *printer) {
     printer->print(F(" missing "));
     for (byte s=0; s<max; s++) {
       if (~(found|added) & ((uint32_t)1 << s) && devices[s] != 0) {
-        printer->print(" ");
-        uint64_t rev_addr = reverse_ow_addr(&devices[s]);
-        print_ow_addr(printer, rev_addr);
+        printer->print(" #");
+        printer->print(s);
+        printer->print(':');
+        print_ow_addr(printer, devices[s]);
       }
     }
     printer->println();
@@ -101,7 +106,7 @@ uint32_t ow_scan(byte pin, uint64_t *devices, uint8_t max, Print *printer) {
 static byte count_bits(uint32_t vector) {
   byte n = 0;
   for (byte i=0; i<32; i++)
-    if (vector & (1<<i))
+    if (vector & ((uint32_t)1<<i))
       n++;
   return n;
 }

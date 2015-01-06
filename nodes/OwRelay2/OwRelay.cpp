@@ -18,13 +18,7 @@ void OwRelay::init(uint8_t pin, uint64_t *addr, uint8_t max) {
   ds = new OneWire(pin);
   rlyAddr = addr;
   rlyMax = max < MAX_COUNT ? max : MAX_COUNT;
-  failed = 0;
-  rlyState = (bool *)calloc(max, sizeof(bool));
-#if DEBUG
-  Serial.print("OWR: max=");
-  Serial.print(rlyMax);
-  Serial.println();
-#endif
+  rlyState = 0;
 }
 
 // ===== Operation =====
@@ -43,18 +37,16 @@ bool OwRelay::loop(uint8_t secs) {
     // see whether it's a relay
     if (!isRelay(s)) continue;
 
-    bool state = rawRead(rlyAddr[s]);
+    bool state = rawRead(s);
     uint32_t bit = (uint32_t)1 << s;
+    rlyState = (rlyState & ~bit) | ((uint32_t)state << s);
 
-    if (state < 0) {
-      // read failed
-      rlyState[s] = false;
-      failed |= bit;
-    } else {
-      // read succeeded
-      failed &= ~bit;
-      rlyState[s] = state & 1;
-    }
+#if DEBUG
+    logger->print("OWR ");
+    logger->print(s);
+    logger->print("=");
+    logger->println(state&1);
+#endif
   }
   return true;
 }
@@ -62,13 +54,14 @@ bool OwRelay::loop(uint8_t secs) {
 // ===== Accessors =====
 
 bool OwRelay::get(uint8_t i) {
-  return i < rlyMax && rlyState[i];
+  return i < rlyMax && ((rlyState>>i)&1);
 }
 
 bool OwRelay::set(uint8_t i, bool value) {
-  if (rlyState[i] == value) return true;
-  bool ok = rawWrite(rlyAddr[i], value);
-  if (ok) rlyState[i] = value;
+  if (i >= rlyMax || !isRelay(i)) return false;
+  bool ok = rawWrite(i, value);
+  uint32_t bit = (uint32_t)1 << i;
+  if (ok) rlyState = (rlyState & ~bit) | ((uint32_t)value << i);
   return ok;
 }
 
@@ -83,62 +76,65 @@ void OwRelay::printDebug(Print *printer) {
   printer->println(F(" switches"));
 
   for (uint8_t s=0; s<rlyMax; s++) {
+    if (!isRelay(s)) continue;
     printer->print(s);
-    printer->print(": ");
-    printer->print(rlyState[s]);
-    printer->println();
+    printer->print('=');
+    printer->print(get(s));
+    printer->print(' ');
   }
+  printer->println();
 }
 
 // Read the state, returns -1 on failure
-int8_t OwRelay::rawRead(uint64_t addr) {
-  uint64_t rev_addr = reverse_ow_addr(&addr);
+bool OwRelay::rawRead(uint8_t r) {
+  uint64_t rev_addr = reverse_ow_addr(rlyAddr+r);
   byte data[12];
+
+  // run a search on the bus for this device 'cause it's the only way to read it without
+  // toggling it, sigh
   ds->reset();
-  ds->select((uint8_t *)&rev_addr);
-  uint8_t value = ds->read_bit() ^ 1; // read the switch value
-
-#if DEBUG
-  Serial.print(F("OWR: Good data for "));
-  printAddr(&Serial, addr);
-  Serial.print("->");
-  Serial.print(value);
-  Serial.println();
-#endif
-
-  return value;
+  //ds->select((uint8_t *)&rev_addr); // the select call does a ROM select, which toggles :-(
+  ds->write(0xF0, 1); // search
+  for (uint8_t i=0; i<64; i++) {
+    uint8_t bit = (rev_addr>>i) & 1;
+    uint8_t id_bit_pos = ds->read_bit();
+    uint8_t id_bit_neg = ds->read_bit();
+    if (bit && id_bit_neg || !bit && id_bit_pos) {
+      logger->print("OWR read failed: bit ");
+      logger->print(i);
+      logger->print(" need ");
+      logger->print(bit);
+      logger->print(" got ");
+      logger->print(id_bit_pos);
+      logger->print('/');
+      logger->println(id_bit_neg);
+      return 0;
+    }
+    ds->write_bit(bit);
+  }
+  bool state =  ds->read_bit() & 1; // read the switch value
+  ds->reset();
+  return state;
 }
 
-bool OwRelay::rawWrite(uint64_t addr, bool value) {
-  uint64_t rev_addr = reverse_ow_addr(&addr);
-  uint8_t *a = (uint8_t *)&rev_addr;
-  ds->reset();
-  ds->write(0x55, 1); // ROM select
-  for(int i = 0; i < 8; i++) ds->write(a[i], 1);
-  uint8_t bit = ds->read_bit();
-  ds->reset();
+bool OwRelay::rawWrite(uint8_t r, bool value) {
+  bool cur = rawRead(r);
+  if (cur == value) return true; // it's already looking good
 
-  bool oops = false;
-  value ^= 1;
-  if ((bit&1) ^ value) {
-    oops = true;
-    // toggled the wrong way, toggle again...
-    ds->write(0x55, 1); // ROM select
-    for(int i = 0; i < 8; i++) ds->write(a[i], 1);
-    bit = ds->read_bit();
-    ds->reset();
-  }
+  // gotta toggle the value
+  uint64_t rev_addr = reverse_ow_addr(rlyAddr+r);
+  uint8_t *a = (uint8_t *)&rev_addr;
 #if DEBUG
-  Serial.print(F("OWR: Write "));
-  printAddr(&Serial, addr);
-  Serial.print("<-");
-  Serial.print(value);
-  if (oops) Serial.print(" 2xtoggle");
-  Serial.print(" bit=");
-  Serial.print(bit);
-  Serial.println();
+  logger->print("OWR toggle ");
+  logger->println(r);
 #endif
 
-  return !((bit&1) ^ value);
+  ds->reset();
+  ds->write(0x55, 1); // ROM select
+  for(int i = 0; i < 8; i++) ds->write(a[i], 0);
+  bool bit = ds->read_bit() & 1;
+  ds->reset();
+
+  return bit == value;
 }
 

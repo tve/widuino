@@ -9,7 +9,7 @@
 // If the next poll also fails, a NAN (not a number) floating point value will be returned for
 // the sensor. If the failure persists for hours the min/max will remain frozen at their last
 // values.
-// 
+//
 // This module keeps track of the minimum and maximum temperature over the past 24 hours for
 // each sensor in a relatively simplistic way. It does this by keeping min/max for 6 4-hour
 // periods and shifts these every 4 hours. It also keeps the min/max as integers to save space.

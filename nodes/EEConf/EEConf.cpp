@@ -6,6 +6,7 @@
 #include <util/crc16.h>
 #include <avr/eeprom.h>
 #include <EEConf.h>
+#include <Logger.h>
 
 #define DEBUG 0
 
@@ -110,9 +111,13 @@ void eeconf_dispatch(volatile uint8_t *data, uint8_t len) {
     uint8_t m = configs[i]->moduleId;
     if (m == module) {
       configs[i]->receive(data+1, len-1);
+      //logger->print("dispatch ");
+      //logger->println(module);
       return;
     }
   }
+      logger->print("failed to dispatch ");
+      logger->println(module);
 }
 
 void eeconf_reset() {

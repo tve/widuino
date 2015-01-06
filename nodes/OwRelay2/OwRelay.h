@@ -38,7 +38,7 @@ public:
   // @return true if a conversion just finished
   bool loop(uint8_t secs);
 
-  // Get the state of the nth switch
+  // Get the state of the nth switch, returns true=on, false=off
   bool get(uint8_t i);
 
   // Set the state of the nth switch, returns true on success
@@ -55,15 +55,14 @@ private:
 
   uint64_t *rlyAddr;		  // addresses of relays
   uint8_t rlyMax;                 // max number of relays
-  bool *rlyState;                 // current state for each switch
-  uint16_t failed;                // bit vector of failed switches
+  uint32_t rlyState;              // current state for each switch
   unsigned long lastPoll;         // timestamp of last poll
 
   void init(uint8_t pin, uint64_t *addr, uint8_t max);   // helper for constructors
   void print(uint64_t addr);
 
-  int8_t rawRead(uint64_t addr);
-  bool rawWrite(uint64_t addr, bool value);
+  bool rawRead(uint8_t r);
+  bool rawWrite(uint8_t r, bool value);
 };
 
 #endif

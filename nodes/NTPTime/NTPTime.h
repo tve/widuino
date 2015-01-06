@@ -5,24 +5,15 @@
 #ifndef NTPTIME_H
 #define NTPTIME_H
 
+#include <Time.h>
+
 // Assumes JeeLib.h is included for rf12 constants
 
-class NTPTime : public Configured {
+// handler for NTPTime messages received. The handler uses the timestamp in the message to set the
+// local time clock (Time library). Use the Time library to read the current time.
+void handleNTPTime(volatile uint8_t *pkt, uint8_t len);
 
-  // Configuration structure stored in EEPROM
-  typedef struct {
-    int8_t	offset;	  // time zone offset
-  } ntptime_config;
-
-  int8_t offset;
-
-public:
-	// constructor
-	NTPTime(void);
-
-  // Configuration methods
-	virtual void applyConfig(uint8_t *);
-	virtual void receive(volatile uint8_t *pkt, uint8_t len);
-};
+// Pretty-print the time as YYYY/MM/DD HH:MM:SS UTC
+void printNTPTime(Print *p, time_t t=0);
 
 #endif // NTPTIME_H

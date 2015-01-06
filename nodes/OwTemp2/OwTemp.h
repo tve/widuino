@@ -31,7 +31,7 @@
 class OwTemp {
 public:
   // Create OWTemp object for a pin and pass-in the list of sensors
-  OwTemp (uint8_t pin, uint64_t *addr, uint8_t max);
+  OwTemp (uint8_t pin, uint64_t *addr, uint8_t max, uint8_t pup_pin=0);
 
   // Poll all the sensors every seconds interval. This can be called every iteration of the
   // wiring loop() function and keeps track of when an actual poll is necessary internally.
@@ -51,8 +51,14 @@ public:
   void printDebug(Print *printer);
   bool isTemp(uint8_t s);
 
+  // public for debugging
+  float read(uint8_t s);
+  int16_t rawRead(uint64_t addr);
+  void start();
+
 private:
   OneWire *ds;
+  uint8_t pupPin;		  // extra pull-up pin for lines with many DS18B20's
 
   uint64_t *tempAddr;		  // addresses of temp sensors
   uint8_t tempMax;                // max number of sensors
@@ -66,11 +72,8 @@ private:
   int8_t (*sensMin)[6];           // min/max temps (-88 offset -> supports -40F..215F)
   int8_t (*sensMax)[6];
 
-  void init(uint8_t pin, uint64_t *addr, uint8_t max);  // helper for constructors
+  void init(uint8_t pin, uint64_t *addr, uint8_t max, uint8_t pup_pin);  // helper for constructors
   void setresolution(uint64_t addr, uint8_t bits);      // set the resolution of a sensor
-  void start();
-  int16_t rawRead(uint64_t addr);
-  float read(uint8_t s);
   void print(uint64_t addr);
 };
 

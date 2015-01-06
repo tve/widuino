@@ -247,7 +247,15 @@ byte msgProcessAnswer() {
 
   // Send the packet on RF. It would be nice to be able to handle some incoming packets,
   // but we'd need some buffering for that...
-  rf12_sendNow(hdr, gPB+UDP_DATA_P+3, len-3);
+  //rf12_sendNow(hdr, gPB+UDP_DATA_P+3, len-3);
+  for (uint8_t i=0; i<250; i++) {
+    if (rf12_canSend()) {
+      rf12_sendStart(hdr, gPB+UDP_DATA_P+3, len-3);
+      break;
+    }
+    delay(1);
+    rf12_recvDone(); // keep the driver state machine going, ignore incoming
+  }
 
 #if DEBUG_UDP
   logger.print(F("UDP  RCV packet: hdr=0x"));
@@ -384,9 +392,9 @@ void loop() {
 
   bool ethReady = ether.isLinkUp() && !ether.clientWaitingGw();
 
-  // Every few seconds send an NTP time request
+  // Every minute send an NTP time request
 #if NTP
-  if (ethReady && ntpTimer.poll(5000)) {
+  if (ethReady && ntpTimer.poll(57737)) {
     ether.ntpRequest(ntpServer, ntpPort);
 #if DEBUG_UDP
     Serial.println(F("Sending NTP request"));
@@ -544,6 +552,7 @@ void loop() {
       // We could try and adjust for the ethernet+rf12 delay, but too much trouble...
       if (rf12_canSend()) {
         struct net_time { uint8_t module; uint32_t time; } tbuf = { NTPTIME_MODULE, time };
+        //rf12_sendStart(RF12_HDR_DST | 13, &tbuf, sizeof(tbuf));
         rf12_sendStart(RF12_ID, &tbuf, sizeof(tbuf));
         num_rf12_snd++;
 #if DEBUG_NTP
